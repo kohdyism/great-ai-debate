@@ -620,6 +620,27 @@ export class HostEngine {
     s.scores[team] = (s.scores[team] ?? 0) + delta;
     s.scoreLog = [...s.scoreLog, { id: uid('s'), at: now(), team, delta, reason }].slice(-300);
   }
+  /** Restart the current debate: undo its points, clear its question and vote, back to the wheel. */
+  restartDebate = () => {
+    const d = currentDebate(this.state);
+    if (!d) return;
+    if (d.winner) this.setWinner(null);
+    if (this.spinTimer) clearTimeout(this.spinTimer);
+    this.update((s) => {
+      const dd = currentDebate(s)!;
+      dd.questionId = null;
+      dd.question = null;
+      dd.winner = null;
+      if (s.poll?.debateId === dd.id) s.poll = null;
+      s.pollHistory = s.pollHistory.filter((p) => p.debateId !== dd.id);
+      s.cur.step = 'spin';
+      s.screen = 'show';
+      s.wheel = { ...emptyWheel(), toDeg: s.wheel.toDeg, fromDeg: s.wheel.toDeg };
+      s.timer = emptyTimer(s.settings.prepSec, 'Preparation');
+      s.fx = { id: uid(), kind: 'flash' };
+    });
+    this.toast('Debate restarted — spin the wheel again.', 'ok');
+  };
   adjust = (team: string, delta: number) =>
     this.update((s) => {
       this.addPoints(s, team, delta, 'Host adjustment');
@@ -805,7 +826,7 @@ export class HostEngine {
       p.simulatedParticipants = 0;
     });
     this.refreshAudience();
-    this.toast('Show reset: scores and results cleared. Teams and questions kept.', 'ok');
+    this.toast('Show restarted from the beginning. Teams and questions kept.', 'ok');
   };
   newRoom = async () => {
     const { teams, topics, settings, practice } = this.state;

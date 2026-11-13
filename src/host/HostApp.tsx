@@ -72,6 +72,16 @@ export default function HostApp() {
             👥 {s.audience.real}
             {s.audience.simulated ? ` +${s.audience.simulated} sim` : ''}
           </span>
+          <ConfirmButton
+            className="btn-danger btn-sm"
+            msg="Restart the whole show from the title screen? All scores, results and votes are cleared. Your teams, topics and statements are kept."
+            onConfirm={() => {
+              e.resetShow();
+              setTab('run');
+            }}
+          >
+            ↺ Restart show
+          </ConfirmButton>
           <a href={stageUrl} target="gad-stage" className="btn-white btn-sm">
             ⧉ Open projector screen
           </a>
@@ -194,7 +204,14 @@ function Run({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngine }) {
 
         {/* Step pills */}
         {onShow && s.cur.step !== 'intro' && (
-          <div className="flex gap-1">
+          <div className="flex gap-1 items-stretch">
+            <ConfirmButton
+              className="btn-danger btn-sm !text-[10px] whitespace-nowrap"
+              msg={`Restart Debate ${s.cur.debate + 1}? Its question, vote and any points it gave are cleared, and you spin again.`}
+              onConfirm={e.restartDebate}
+            >
+              ↺ Restart debate
+            </ConfirmButton>
             {STEPS.map((st, i) => (
               <button
                 key={st.id}
@@ -272,8 +289,8 @@ function Run({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngine }) {
             </div>
           </div>
         </Card>
-        <ConfirmButton className="btn-danger btn-sm w-full" msg="Reset the show? All scores and results are cleared. Teams and questions are kept." onConfirm={e.resetShow}>
-          Reset scores & results
+        <ConfirmButton className="btn-danger btn-sm w-full" msg="Restart the whole show from the title screen? All scores, results and votes are cleared. Your teams, topics and statements are kept." onConfirm={e.resetShow}>
+          ↺ Restart whole show
         </ConfirmButton>
       </div>
     </div>
