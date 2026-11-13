@@ -170,7 +170,17 @@ function useStageEffects(s: PublicState | null, audio: boolean) {
         else if (s.fx.kind === 'sound' && sound && s.fx.sound) playSfx(s.fx.sound as SfxName);
       }
     }
+    // Finale: podium reveal (confetti even when muted).
+    if (p && s.screen === 'champion' && p.screen !== 'champion') {
+      setTimeout(() => fireConfetti(true), 3600);
+      if (sound) {
+        setTimeout(() => sfx.points(), 400);
+        setTimeout(() => sfx.points(), 1900);
+        setTimeout(() => (sfx.fanfare(), sfx.bigApplause()), 3600);
+      }
+    }
     if (!p || !sound) return;
+    if (s.screen === 'drumroll' && p.screen !== 'drumroll') sfx.drumroll(6);
     if (s.status === 'live' && p.status === 'lobby') sfx.showOpen();
     if (s.poll && s.poll.status === 'open' && p.poll?.id !== s.poll.id) sfx.ding();
     // A ding for every vote that comes in (several at once are spread out a little).
@@ -245,6 +255,8 @@ function trackFor(s: PublicState): TrackId | null {
       return 'lobby';
     case 'champion':
       return 'celebrate';
+    case 'drumroll':
+      return null;
     case 'show':
       if (s.cur.step === 'intro') return 'lobby';
       if (s.cur.step === 'spin' || s.cur.step === 'verdict') return 'suspense';

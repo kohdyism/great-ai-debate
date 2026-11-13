@@ -462,3 +462,4 @@ body {
 }
 .anim-shake-loop { animation: shake-loop 0.35s linear infinite; }
 .stage-shake { animation: shake 0.5s ease-in-out 2; }
+@keyframes podium-rise { from { transform: translateY(100%); } to { transform: translateY(0); } }

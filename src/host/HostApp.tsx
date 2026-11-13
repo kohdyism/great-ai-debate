@@ -261,8 +261,8 @@ function Run({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngine }) {
             <button className="btn-ghost btn-sm" onClick={() => e.setMessage('WE’LL BE RIGHT BACK', 'Grab a slice of pizza 🍕')}>
               Break screen
             </button>
-            <button className="btn-gold btn-sm" onClick={e.showChampion}>
-              🏆 Champion
+            <button className="btn-gold btn-sm" onClick={e.startFinale} title="Drumroll, then the podium">
+              🏆 Winner podium
             </button>
             <button className="btn-ghost btn-sm" onClick={e.fireConfetti}>
               🎉 Confetti
@@ -469,6 +469,10 @@ function Scores({ s, e }: { s: PublicState; e: HostEngine }) {
 
 const BOARD: [string, string][] = [
   ['applause', '👏 Applause'],
+  ['cheer', '📣 Cheering'],
+  ['laugh', '😂 Laugh track'],
+  ['bigLaugh', '🤣 Big laugh'],
+  ['aww', '🥺 Aww'],
   ['bigApplause', '🎉 Big cheer'],
   ['drumroll', '🥁 Drumroll'],
   ['airhorn', '📯 Airhorn'],

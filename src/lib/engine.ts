@@ -31,6 +31,7 @@ const PUB_KEY = 'gad:host:public:v2';
 const PRIV_KEY = 'gad:host:private:v2';
 export const HOST_PUB_KEY = PUB_KEY;
 export const VOTE_LABEL = 'Audience vote';
+export const DRUMROLL_MS = 6000;
 
 const emptyTimer = (sec = 60, label = 'Timer', side: Side | null = null): TimerState => ({
   label,
@@ -108,7 +109,8 @@ export function nextLabel(s: PublicState): string {
   if (s.screen === 'join') return s.cur.step === 'intro' && s.cur.debate === 0 && s.cur.round === 0 ? 'Begin Round 1' : 'Back to the debates';
   if (s.screen === 'message') return 'Back to the debates';
   if (s.screen === 'champion') return 'Show complete 🎉';
-  if (s.screen === 'scoreboard') return showFinished(s) ? 'Crown the champion 🏆' : 'Back to the debates';
+  if (s.screen === 'drumroll') return 'Reveal the podium now';
+  if (s.screen === 'scoreboard') return showFinished(s) ? 'Drumroll… 🥁 then the podium' : 'Back to the debates';
   const step = s.cur.step;
   if (step === 'intro') return 'Spin for Debate 1';
   if (step === 'spin') return s.wheel.status === 'spinning' ? 'Spinning…' : 'SPIN THE WHEEL';
@@ -315,6 +317,10 @@ export class HostEngine {
       }, 400),
     );
     void this.pollParticipants();
+    if (this.state.screen === 'drumroll') {
+      const left = (this.state.finaleAt ?? 0) + DRUMROLL_MS - now();
+      this.finaleTimer = setTimeout(() => this.state.screen === 'drumroll' && this.showChampion(), Math.max(0, left));
+    }
     const w = this.state.wheel;
     if (w.status === 'spinning') {
       this.spinTimer = setTimeout(() => this.landSpin(w.spinId!), Math.max(0, w.startedAt + w.durationMs - now()));
@@ -461,8 +467,9 @@ export class HostEngine {
         x.status = 'live';
         x.fx = { id: uid(), kind: 'flash' };
       });
+    if (s.screen === 'drumroll') return this.showChampion();
     if (s.screen === 'scoreboard' || s.screen === 'champion') {
-      if (showFinished(s)) return this.showChampion();
+      if (s.screen === 'scoreboard' && showFinished(s)) return this.startFinale();
       return this.update((x) => void (x.screen = 'show'));
     }
     const d = currentDebate(s);
@@ -757,12 +764,28 @@ export class HostEngine {
       s.screen = screen;
       if (screen !== 'home' && s.status === 'lobby') s.status = 'live';
     });
-  showChampion = () =>
+  private finaleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Drumroll page, then the podium reveal. */
+  startFinale = () => {
+    this.update((s) => {
+      s.screen = 'drumroll';
+      s.status = 'live';
+      s.finaleAt = now();
+      if (s.timer.status === 'running') s.timer = { ...s.timer, baseMs: timerRemaining(s.timer), startedAt: null, status: 'paused' };
+    });
+    if (this.finaleTimer) clearTimeout(this.finaleTimer);
+    this.finaleTimer = setTimeout(() => {
+      if (this.state.screen === 'drumroll') this.showChampion();
+    }, DRUMROLL_MS);
+  };
+  showChampion = () => {
+    if (this.finaleTimer) clearTimeout(this.finaleTimer);
     this.update((s) => {
       s.screen = 'champion';
       s.status = 'live';
-      s.fx = { id: uid(), kind: 'confetti' };
+      s.finaleAt = now();
     });
+  };
   setMessage = (title: string, body: string) =>
     this.update((s) => {
       s.message = { title, body };

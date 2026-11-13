@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import { AnimatedNumber, BigTimer, QR, StageScoreBar, VoteBars, Wheel, joinUrl, useRanking, wheelAngle } from '../components/Widgets';
 import { Backdrop, LedPanel, MotionText, Podium, TitleLockup } from '../components/StageKit';
-import { currentDebate, currentRound, currentTopic, isPractice, roundLabel, teamName, usedQuestionIds } from '../lib/engine';
+import { DRUMROLL_MS, currentDebate, currentRound, currentTopic, isPractice, roundLabel, teamName, usedQuestionIds } from '../lib/engine';
 import { SPEECHES, debateFlow, speechOf, speechSec } from '../lib/content';
 import { useNow } from '../lib/hooks';
 import type { PublicState } from '../lib/types';
 
-const NO_SCOREBAR = new Set(['home', 'champion']);
+const NO_SCOREBAR = new Set(['home', 'champion', 'drumroll']);
 
 export function StageScreen({ s }: { s: PublicState }) {
   const showBar = s.showScoreboard && !NO_SCOREBAR.has(s.screen) && !(s.screen === 'show' && s.cur.step === 'intro');
@@ -14,7 +14,7 @@ export function StageScreen({ s }: { s: PublicState }) {
   const left = s.screen === 'show' || s.screen === 'scoreboard' ? `${roundLabel(s)} · ${(topic?.title ?? '').toUpperCase()}` : `ROOM ${s.roomCode}`;
   return (
     <>
-      <Backdrop dim={s.screen === 'champion' ? 0.25 : 0} crowd={s.screen !== 'scoreboard'} />
+      <Backdrop dim={s.screen === 'drumroll' ? 0.7 : s.screen === 'champion' ? 0.3 : 0} crowd={s.screen !== 'scoreboard'} />
       {s.screen === 'home' && <HomeScreen s={s} />}
       {s.screen !== 'home' && (
         <>
@@ -34,6 +34,8 @@ function Body({ s }: { s: PublicState }) {
       return <JoinScreen s={s} />;
     case 'scoreboard':
       return <ScoreboardScreen s={s} />;
+    case 'drumroll':
+      return <DrumrollScreen s={s} />;
     case 'champion':
       return <ChampionScreen s={s} />;
     case 'message':
@@ -447,34 +449,104 @@ function ScoreboardScreen({ s }: { s: PublicState }) {
   );
 }
 
-// ───────────────────────── CHAMPION ─────────────────────────
-function ChampionScreen({ s }: { s: PublicState }) {
-  const ranked = useRanking(s);
-  const winners = ranked.filter((t) => t.rank === 1);
+// ───────────────────────── FINALE: DRUMROLL ─────────────────────────
+function DrumrollScreen({ s }: { s: PublicState }) {
+  const at = useNow(true, 20);
+  const left = Math.max(0, (s.finaleAt ?? at) + DRUMROLL_MS - at);
+  const n = Math.ceil(left / 1000);
   return (
     <Center>
-      <div className="font-condensed tracking-[0.5em] text-[46px] text-gold glow-gold anim-rise">{winners.length > 1 ? 'JOINT CHAMPIONS' : 'CHAMPIONS OF THE GREAT AI DEBATE'}</div>
-      <div className="mt-6 anim-slam delay-1 text-center" style={{ maxWidth: 1800 }}>
-        {winners.map((w) => (
-          <div key={w.id} className="font-display text-[150px] leading-[0.95] text-goldgrad uppercase">
-            {w.name}
+      <div className="absolute top-0 bottom-0 w-[600px] bg-gradient-to-r from-transparent via-white/15 to-transparent" style={{ animation: 'spot-sweep 1.5s ease-in-out infinite alternate' }} />
+      <div className="font-condensed tracking-[0.6em] text-[46px] text-white/70">ALL ROUNDS COMPLETE</div>
+      <div className="flex items-center gap-12 mt-6">
+        <div className="text-[230px] anim-shake-loop">🥁</div>
+        <div className="font-display text-center leading-[0.95]">
+          <div className="text-[110px] text-white glow-white">AND THE</div>
+          <div className="text-[150px] text-goldgrad" style={{ animation: 'pulse-glow 0.4s ease-in-out infinite' }}>
+            CHAMPIONS ARE…
           </div>
-        ))}
+        </div>
+        <div className="text-[230px] anim-shake-loop" style={{ animationDelay: '0.12s' }}>
+          🥁
+        </div>
       </div>
-      <div className="font-condensed text-[80px] mt-6 text-white glow-white anim-rise delay-3">{winners[0]?.score ?? 0} POINTS</div>
-      <div className="flex flex-wrap justify-center gap-10 mt-10 anim-rise delay-5 max-w-[1600px]">
-        {ranked
-          .filter((t) => t.rank !== 1)
-          .map((t) => (
-            <div key={t.id} className="text-center">
-              <div className="font-display text-[30px] text-white/70 uppercase">
-                {t.rank}. {t.name}
+      {n > 0 && (
+        <div key={n} className="font-condensed text-[160px] leading-none mt-6 text-white/80 anim-count">
+          {n}
+        </div>
+      )}
+    </Center>
+  );
+}
+
+// ───────────────────────── FINALE: PODIUM (Kahoot-style) ─────────────────────────
+const PODIUM_DELAY = { 3: 0.4, 2: 1.9, 1: 3.6 } as Record<number, number>;
+export const PODIUM_REVEAL_MS = 3600;
+
+function ChampionScreen({ s }: { s: PublicState }) {
+  const ranked = useRanking(s);
+  // Places by position (ties share the higher place number in the label).
+  const top = ranked.slice(0, 3);
+  const rest = ranked.slice(3);
+  const slots = [
+    { pos: 2, team: top[1], h: 330, color: 'linear-gradient(180deg,#e9edf5,#9aa3b5)', medal: '🥈', x: -470 },
+    { pos: 1, team: top[0], h: 460, color: 'linear-gradient(180deg,#fff1b8,#e0b13a)', medal: '🥇', x: 0 },
+    { pos: 3, team: top[2], h: 240, color: 'linear-gradient(180deg,#f2c59b,#b8733d)', medal: '🥉', x: 470 },
+  ].filter((x) => x.team);
+  const winners = ranked.filter((t) => t.rank === 1);
+  const at = useNow(true, 10);
+  const since = at - (s.finaleAt ?? at);
+  const winnerShown = since > PODIUM_REVEAL_MS * 1000 / 1000 + 300;
+  return (
+    <div className="absolute inset-0">
+      <div className="absolute top-[40px] left-0 right-0 text-center">
+        <div className="font-condensed tracking-[0.5em] text-[40px] text-gold glow-gold">THE GREAT AI DEBATE</div>
+        <div className={`font-display text-[90px] leading-none mt-2 transition-all duration-700 ${winnerShown ? 'opacity-100' : 'opacity-0 translate-y-4'}`}>
+          {winners.length > 1 ? (
+            <span className="text-goldgrad">JOINT CHAMPIONS!</span>
+          ) : (
+            <>
+              <span className="text-goldgrad">{winners[0]?.name.toUpperCase()}</span> WINS!
+            </>
+          )}
+        </div>
+      </div>
+      {slots.map((sl) => {
+        const delay = PODIUM_DELAY[sl.pos];
+        return (
+          <div key={sl.pos} className="absolute bottom-[110px] flex flex-col items-center" style={{ left: 960 + sl.x - 200, width: 400 }}>
+            <div className="text-center mb-4" style={{ animation: `rise 0.6s ${delay + 0.5}s both` }}>
+              <div className="text-[90px] leading-none">{sl.medal}</div>
+              <div className={`font-display uppercase leading-[1] mt-2 ${sl.pos === 1 ? 'text-[54px] text-gold glow-gold' : 'text-[40px] text-white'}`} style={{ maxWidth: 400 }}>
+                {sl.team!.name}
               </div>
-              <div className="font-condensed text-[48px] text-white/60">{t.score}</div>
+            </div>
+            <div className="w-full overflow-hidden" style={{ height: sl.h }}>
+              <div
+                className="w-full h-full rounded-t-2xl flex flex-col items-center justify-start pt-6"
+                style={{
+                  background: sl.color,
+                  boxShadow: sl.pos === 1 ? '0 0 80px rgba(247,215,116,0.7)' : '0 0 30px rgba(255,255,255,0.15)',
+                  animation: `podium-rise 0.9s ${delay}s cubic-bezier(.2,.9,.3,1.15) both`,
+                }}
+              >
+                <div className="font-condensed text-[130px] leading-none text-black/75">{sl.pos}</div>
+                <div className="font-condensed text-[52px] leading-none text-black/70 mt-2">{sl.team!.score} PTS</div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {rest.length > 0 && (
+        <div className="absolute bottom-[30px] left-0 right-0 flex justify-center gap-10" style={{ animation: 'rise 0.6s 4.4s both' }}>
+          {rest.map((t) => (
+            <div key={t.id} className="font-display text-[28px] text-white/70 uppercase">
+              {t.rank}. {t.name} <span className="font-condensed text-white/50">{t.score}</span>
             </div>
           ))}
-      </div>
-    </Center>
+        </div>
+      )}
+    </div>
   );
 }
 

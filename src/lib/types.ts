@@ -65,7 +65,7 @@ export interface PracticeSettings {
 export type SpeechStep = 'for' | 'against' | 'forCounter' | 'againstCounter' | 'againstSummary' | 'forSummary';
 export type Step = 'intro' | 'spin' | 'reveal' | 'prep' | SpeechStep | 'verdict' | 'result';
 
-export type ScreenId = 'home' | 'join' | 'show' | 'scoreboard' | 'champion' | 'message';
+export type ScreenId = 'home' | 'join' | 'show' | 'scoreboard' | 'drumroll' | 'champion' | 'message';
 
 export interface TimerState {
   label: string;
@@ -170,6 +170,8 @@ export interface PublicState {
   fx: Fx | null;
   showScoreboard: boolean;
   audience: { real: number; simulated: number };
+  /** when the finale drumroll started (server ms) */
+  finaleAt?: number;
   updatedAt: number;
 }
 

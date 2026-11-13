@@ -4,6 +4,10 @@ import { useMemo, type CSSProperties, type ReactNode } from 'react';
 
 export const BURST_MS: Record<string, number> = {
   applause: 3200,
+  laugh: 3200,
+  cheer: 3500,
+  bigLaugh: 4200,
+  aww: 2200,
   bigApplause: 4200,
   drumroll: 3200,
   airhorn: 2200,
@@ -106,6 +110,36 @@ export function SoundBurst({ name }: { name: string }) {
           <BigText className="text-goldgrad text-[200px]" sub="MAKE SOME NOISE!">
             APPLAUSE!
           </BigText>
+        </>,
+      );
+    case 'cheer':
+      return out(
+        <>
+          <Vignette color="rgba(247,215,116,0.3)" />
+          <Rays color="rgba(255,255,255,0.6)" opacity={0.3} />
+          <Particles items={['🙌', '📣', '🎉', '🔥']} count={32} />
+          <BigText className="text-goldgrad text-[220px] anim-shake-loop" sub="LET'S HEAR IT!">
+            WOOOOO!
+          </BigText>
+        </>,
+      );
+    case 'laugh':
+    case 'bigLaugh':
+      return out(
+        <>
+          <Vignette color="rgba(247,215,116,0.25)" />
+          <Particles items={['😂', '🤣', '😆', '😂']} count={name === 'bigLaugh' ? 40 : 26} />
+          <BigText className="text-goldgrad text-[220px] anim-shake-loop" sub={name === 'bigLaugh' ? 'THE ROOM IS IN STITCHES' : undefined}>
+            HA HA HA!
+          </BigText>
+        </>,
+      );
+    case 'aww':
+      return out(
+        <>
+          <Vignette color="rgba(255,120,180,0.3)" />
+          <Particles items={['🥺', '💖', '🥹']} count={18} size={[60, 110]} />
+          <BigText className="text-white glow-white text-[220px]">AWWW…</BigText>
         </>,
       );
     case 'bigApplause':
