@@ -10,7 +10,7 @@ const NO_SCOREBAR = new Set(['home', 'champion']);
 export function StageScreen({ s }: { s: PublicState }) {
   const showBar = s.showScoreboard && !NO_SCOREBAR.has(s.screen) && !(s.screen === 'show' && s.cur.step === 'intro');
   const topic = currentTopic(s);
-  const left = s.screen === 'show' || s.screen === 'scoreboard' ? `ROUND ${s.cur.round + 1} OF ${s.schedule.length} · ${topic?.title ?? ''}` : `ROOM ${s.roomCode}`;
+  const left = s.screen === 'show' || s.screen === 'scoreboard' ? `ROUND ${s.cur.round + 1} OF ${s.schedule.length} · ${(topic?.title ?? '').toUpperCase()}` : `ROOM ${s.roomCode}`;
   return (
     <>
       <Backdrop dim={s.screen === 'champion' ? 0.25 : 0} crowd={s.screen !== 'scoreboard'} />

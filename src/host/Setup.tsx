@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { aiStatements, getApiKey, randomTemplate, setApiKey } from '../lib/generate';
 import { DEFAULT_TOPICS, buildSchedule, makeTeams } from '../lib/content';
 import type { HostEngine } from '../lib/engine';
 import type { PublicState, Settings, Team, Topic } from '../lib/types';
@@ -10,6 +11,24 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
   const [topics, setTopics] = useState<Topic[]>(() => clone(s.topics));
   const [settings, setSettings] = useState<Settings>(() => ({ ...s.settings }));
   const preview = useMemo(() => buildSchedule(teams, topics), [teams, topics]);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [key, setKey] = useState(getApiKey);
+  const [showKey, setShowKey] = useState(false);
+
+  const generate = async (i: number) => {
+    const t = topics[i];
+    if (!t.title.trim()) return e.toast('Type a topic first, then press Generate.', 'warn');
+    const filled = t.questions.filter((q) => q.text.trim());
+    if (filled.length && !window.confirm(`Replace the ${filled.length} statement(s) in “${t.title}” with new ones?`)) return;
+    setBusy((b) => ({ ...b, [t.id]: true }));
+    const r = await aiStatements(t.title, 6, filled.map((q) => q.text));
+    setBusy((b) => ({ ...b, [t.id]: false }));
+    setTopics((cur) => cur.map((x) => (x.id === t.id ? { ...x, questions: r.statements.map((text) => ({ id: uid('q'), text })) } : x)));
+    if (r.error) e.toast(`AI unavailable (${r.error.slice(0, 80)}) — used the built-in generator instead.`, 'warn');
+    else e.toast(r.source === 'ai' ? `Claude wrote 6 statements for “${t.title}”.` : `6 statements generated for “${t.title}”. Edit any you like.`, 'ok');
+  };
+  const reroll = (i: number, qi: number) =>
+    editTopic(i, (x) => void (x.questions[qi].text = randomTemplate(x.title, x.questions.map((q) => q.text))));
   const nameOf = (id: string) => teams.find((t) => t.id === id)?.name || '—';
   const started = s.scoreLog.length > 0 || s.schedule.some((r) => r.debates.some((d) => d.question));
   const shapeChanges =
@@ -24,7 +43,7 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
     });
 
   const save = () => {
-    const cleanTopics = topics.map((t) => ({ ...t, title: t.title.trim() || 'UNTITLED TOPIC', questions: t.questions.filter((q) => q.text.trim()) }));
+    const cleanTopics = topics.map((t, i) => ({ ...t, title: t.title.trim() || `Topic ${i + 1}`, questions: t.questions.filter((q) => q.text.trim()) }));
     if (cleanTopics.some((t) => t.questions.length === 0)) return window.alert('Every topic needs at least one question.');
     const cleanTeams = teams.map((t, i) => ({ ...t, name: t.name.trim() || `Team ${i + 1}` }));
     if (started && shapeChanges && !window.confirm('You changed the number of teams or rounds. This makes a new schedule and resets all scores. Continue?')) return;
@@ -81,7 +100,7 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
               className="btn-ghost btn-sm"
               onClick={() =>
                 window.confirm('Clear all topics so you can type your own?') &&
-                setTopics(topics.map((t, i) => ({ ...t, title: `TOPIC ${i + 1}`, questions: Array.from({ length: 6 }, () => ({ id: uid('q'), text: '' })) })))
+                setTopics(topics.map((t) => ({ ...t, title: '', questions: Array.from({ length: 6 }, () => ({ id: uid('q'), text: '' })) })))
               }
             >
               Start blank
@@ -89,6 +108,49 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
           </>
         }
       >
+        <div className="rounded-lg bg-gold/5 border border-gold/25 p-3 mb-3 text-sm">
+          <b className="text-gold">✨ Quick way:</b> type any topic (e.g. “Social media”, “Space travel”, “Fast fashion”) and press <b>Generate</b>. You get 6 statements you can edit.
+          <div className="mt-2 text-xs text-white/60">
+            {key ? (
+              <>
+                Using <b className="text-emerald-300">Claude AI</b> for smarter, topic-specific statements.{' '}
+                <button className="underline" onClick={() => setShowKey(!showKey)}>
+                  Change key
+                </button>
+              </>
+            ) : (
+              <>
+                Built-in generator active (works offline).{' '}
+                <button className="underline text-gold" onClick={() => setShowKey(!showKey)}>
+                  Want Claude to write smarter statements? Add an API key
+                </button>
+              </>
+            )}
+          </div>
+          {showKey && (
+            <div className="mt-2 flex gap-2 items-center">
+              <input
+                type="password"
+                className="inp !py-1.5"
+                placeholder="sk-ant-… (Anthropic API key from console.anthropic.com)"
+                value={key}
+                onChange={(ev) => setKey(ev.target.value)}
+                aria-label="Anthropic API key"
+              />
+              <button
+                className="btn-white btn-sm whitespace-nowrap"
+                onClick={() => {
+                  setApiKey(key);
+                  setShowKey(false);
+                  e.toast(key.trim() ? 'API key saved on this computer only.' : 'API key removed.', 'ok');
+                }}
+              >
+                Save key
+              </button>
+            </div>
+          )}
+          {showKey && <p className="text-[11px] text-white/40 mt-1">Stored only in this browser on this laptop. Never sent to the projector, phones or GitHub.</p>}
+        </div>
         <p className="text-xs text-white/50 mb-3">
           Write each question as a statement teams can argue <b className="text-embrace-bright">FOR</b> or <b className="text-ban-bright">AGAINST</b>. The wheel only lands on
           questions not yet used in that round — so aim for at least {teams.length} (one per debate); 6 is ideal.
@@ -103,10 +165,14 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
                   <input
                     className="inp font-display text-lg !py-1.5"
                     value={t.title}
-                    placeholder="Topic title"
-                    onChange={(ev) => editTopic(i, (x) => void (x.title = ev.target.value.toUpperCase()))}
+                    placeholder="Type a topic, e.g. Social media"
+                    onChange={(ev) => editTopic(i, (x) => void (x.title = ev.target.value))}
+                    onKeyDown={(ev) => ev.key === 'Enter' && void generate(i)}
                     aria-label={`Round ${i + 1} topic`}
                   />
+                  <button className="btn-gold btn-sm whitespace-nowrap" disabled={busy[t.id]} onClick={() => void generate(i)}>
+                    {busy[t.id] ? 'Generating…' : '✨ Generate statements'}
+                  </button>
                   {topics.length > 1 && (
                     <button className="btn-danger btn-sm whitespace-nowrap" onClick={() => window.confirm(`Remove Round ${i + 1}?`) && setTopics((cur) => cur.filter((_, j) => j !== i))}>
                       Remove round
@@ -124,6 +190,9 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
                         onChange={(ev) => editTopic(i, (x) => void (x.questions[qi].text = ev.target.value))}
                         aria-label={`Round ${i + 1} question ${qi + 1}`}
                       />
+                      <button className="btn-ghost btn-sm" title="Swap for another statement" onClick={() => reroll(i, qi)} aria-label="New statement">
+                        🎲
+                      </button>
                       <button className="btn-ghost btn-sm" onClick={() => editTopic(i, (x) => void x.questions.splice(qi, 1))} aria-label="Delete question">
                         ✕
                       </button>
@@ -145,7 +214,7 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
           {topics.length < 5 && (
             <button
               className="btn-ghost w-full"
-              onClick={() => setTopics((cur) => [...cur, { id: uid('t'), title: `TOPIC ${cur.length + 1}`, questions: Array.from({ length: 6 }, () => ({ id: uid('q'), text: '' })) }])}
+              onClick={() => setTopics((cur) => [...cur, { id: uid('t'), title: '', questions: Array.from({ length: 6 }, () => ({ id: uid('q'), text: '' })) }])}
             >
               + Add another round
             </button>

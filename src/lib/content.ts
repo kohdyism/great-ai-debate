@@ -6,29 +6,29 @@ const topic = (id: string, title: string, qs: string[]): Topic => ({ id, title, 
 
 /** Example content — every question is a statement teams can argue FOR or AGAINST. Edit in Host → Setup. */
 export const DEFAULT_TOPICS: Topic[] = [
-  topic('t1', 'AI & ASSESSMENT', [
-    'Students should be allowed to use AI in all coursework.',
-    'AI-written essays deserve the same marks as human-written ones.',
-    'Universities should go back to handwritten, in-person exams.',
-    'AI detection tools should be run on every assignment.',
-    'Using AI without declaring it should count as academic misconduct.',
-    'Lecturers should be allowed to use AI to mark essays.',
+  topic('t1', 'AI & the Future of Work', [
+    'AI will create more jobs than it destroys.',
+    'Companies should pay a tax for every job replaced by AI.',
+    'AI productivity should earn everyone a four-day week.',
+    'Job interviews should never be run by AI.',
+    'Creative jobs are safe from AI.',
+    'Everyone should still learn to code.',
   ]),
-  topic('t2', 'AI IN TEACHING & LEARNING', [
-    'AI tutors can replace human tutors.',
-    'AI makes students less capable of independent thinking.',
-    'Every student should have to take an AI-skills course.',
-    'Students who refuse to use AI will fall behind.',
-    'AI makes higher education fairer and more accessible.',
-    'Some lectures should be delivered by AI.',
+  topic('t2', 'AI & Creativity', [
+    'AI-generated art is real art.',
+    'Songs made with AI should be allowed to win music awards.',
+    'Artists should be paid when AI learns from their work.',
+    'A novel written by AI could deserve the Booker Prize.',
+    'AI makes everyone creative.',
+    'Films should be labelled if AI was used to make them.',
   ]),
-  topic('t3', 'THE FUTURE OF UNIVERSITIES', [
-    'AI should be banned from universities.',
-    'AI will make university degrees worthless.',
-    'Research papers written by AI should be published in journals.',
-    'Universities should let AI decide admissions.',
-    'A degree earned with AI help is still a real degree.',
-    'In 20 years, universities as we know them will not exist.',
+  topic('t3', 'AI in Everyday Life', [
+    'An AI friend is better than no friend at all.',
+    'AI should be allowed to drive our cars.',
+    'Smart speakers should be banned from bedrooms.',
+    'Children under 12 should not use AI chatbots.',
+    'AI matchmaking will make relationships better.',
+    'Life is better with AI than without it.',
   ]),
 ];
 

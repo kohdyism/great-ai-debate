@@ -82,7 +82,7 @@ export default function HostApp() {
 
       {tab === 'setup' ? <Setup s={s} e={e} onDone={() => setTab('run')} /> : <Run s={s} p={p} e={e} />}
 
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 space-y-2 w-[min(560px,90vw)]">
+      <div className="fixed top-16 right-4 z-50 space-y-2 w-[min(420px,90vw)]">
         {toasts.map((t) => (
           <div
             key={t.id}
