@@ -346,10 +346,16 @@ function VerdictView({ s }: { s: PublicState }) {
             <VoteBars poll={p} />
           </div>
         ) : p ? (
-          <div className="flex items-center justify-center gap-20">
+          <div className="flex items-center justify-center gap-16">
+            {s.timer.label === 'Audience vote' && <BigTimer t={s.timer} size={300} showLabel={false} />}
             <div className="text-center">
-              <div className="font-condensed text-[180px] leading-none tabular-nums glow-white">
+              <div className="relative font-condensed text-[180px] leading-none tabular-nums glow-white">
                 <AnimatedNumber value={p.voteCount} />
+                {p.voteCount > 0 && (
+                  <span key={p.voteCount} className="absolute -right-24 top-0 text-[64px] text-gold glow-gold" style={{ animation: 'float-up 1.2s ease-out both' }}>
+                    +1
+                  </span>
+                )}
               </div>
               <div className="font-condensed text-[36px] tracking-[0.35em] text-white/70">VOTES CAST</div>
               <div className="mt-3 inline-block rounded-full bg-ban px-6 py-1 font-display text-[26px] anim-pulse">● VOTE NOW ON YOUR PHONE</div>

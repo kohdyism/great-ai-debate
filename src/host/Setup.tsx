@@ -304,6 +304,7 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
               ['speechSec', 'Opening speech (sec)'],
               ['rebuttalSec', 'Counter-argument (sec, 0 = skip)'],
               ['summarySec', 'Closing summary (sec, 0 = skip)'],
+              ['voteSec', 'Audience vote countdown (sec)'],
               ['winPoints', 'Points for a win'],
               ['drawPoints', 'Points each for a draw'],
             ] as [keyof Settings, string][]

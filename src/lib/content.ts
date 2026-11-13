@@ -67,6 +67,7 @@ export const DEFAULT_SETTINGS: Settings = {
   speechSec: 60,
   rebuttalSec: 30,
   summarySec: 30,
+  voteSec: 60,
   winPoints: 10,
   drawPoints: 5,
   spinMs: 6000,

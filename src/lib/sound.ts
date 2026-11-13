@@ -90,6 +90,12 @@ export const sfx = {
     tone(880, 0.35, 'sine', 0.2);
     tone(1320, 0.4, 'sine', 0.12, 0.05);
   },
+  /** One incoming audience vote: short bright ding, slightly varied pitch. */
+  voteDing: (when = 0) => {
+    const f = 1568 * (1 + (Math.random() - 0.5) * 0.06);
+    tone(f, 0.28, 'sine', 0.16, when);
+    tone(f * 1.5, 0.22, 'sine', 0.06, when + 0.02);
+  },
   points: () => {
     tone(660, 0.12, 'triangle', 0.18);
     tone(990, 0.2, 'triangle', 0.18, 0.1);

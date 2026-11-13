@@ -173,6 +173,11 @@ function useStageEffects(s: PublicState | null, audio: boolean) {
     if (!p || !sound) return;
     if (s.status === 'live' && p.status === 'lobby') sfx.showOpen();
     if (s.poll && s.poll.status === 'open' && p.poll?.id !== s.poll.id) sfx.ding();
+    // A ding for every vote that comes in (several at once are spread out a little).
+    if (s.poll && p.poll && s.poll.id === p.poll.id && s.poll.voteCount > p.poll.voteCount) {
+      const n = Math.min(s.poll.voteCount - p.poll.voteCount, 6);
+      for (let i = 0; i < n; i++) sfx.voteDing(i * 0.11);
+    }
     const enteredIntro = s.screen === 'show' && s.cur.step === 'intro' && (p.cur.step !== 'intro' || p.screen !== 'show' || p.cur.round !== s.cur.round);
     if (enteredIntro) sfx.roundSting();
     if (s.cur.step === 'reveal' && p.cur.step === 'spin') sfx.reveal();

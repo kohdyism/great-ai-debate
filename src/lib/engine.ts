@@ -30,6 +30,7 @@ import { clone, makeRoomCode, makeSecret, pick, safeJson, safeRemove, safeSet, u
 const PUB_KEY = 'gad:host:public:v2';
 const PRIV_KEY = 'gad:host:private:v2';
 export const HOST_PUB_KEY = PUB_KEY;
+export const VOTE_LABEL = 'Audience vote';
 
 const emptyTimer = (sec = 60, label = 'Timer', side: Side | null = null): TimerState => ({
   label,
@@ -306,6 +307,13 @@ export class HostEngine {
     getLocalBus().setHandler((req) => this.handleLocal(req));
     this.loops.push(setInterval(() => void this.pollTallies(), 1500));
     this.loops.push(setInterval(() => void this.pollParticipants(), 5000));
+    // Auto-close the audience vote when its countdown reaches zero (follows pauses / +10s / refreshes).
+    this.loops.push(
+      setInterval(() => {
+        const s = this.state;
+        if (s.poll?.status === 'open' && s.timer.label === VOTE_LABEL && s.timer.status === 'running' && timerRemaining(s.timer) <= 0) void this.closeVote();
+      }, 400),
+    );
     void this.pollParticipants();
     const w = this.state.wheel;
     if (w.status === 'spinning') {
@@ -673,7 +681,8 @@ export class HostEngine {
       };
       x.screen = 'show';
       x.cur.step = 'verdict';
-      if (x.timer.status === 'running') x.timer = { ...x.timer, baseMs: timerRemaining(x.timer), startedAt: null, status: 'paused' };
+      const sec = x.settings.voteSec ?? 60;
+      x.timer = { ...emptyTimer(sec, VOTE_LABEL), startedAt: now(), status: 'running' };
     });
   };
   closeVote = async () => {
@@ -683,6 +692,7 @@ export class HostEngine {
       s.poll!.status = 'closed';
       s.poll!.closedAt = now();
       s.poll!.revealed = true;
+      if (s.timer.label === VOTE_LABEL) s.timer = { ...s.timer, baseMs: 0, startedAt: null, status: 'paused' };
     });
     await this.flush();
     await this.pollTallies(true);

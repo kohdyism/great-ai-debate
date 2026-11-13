@@ -392,9 +392,12 @@ function VerdictCard({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngi
             </button>
           )}
           {poll?.status === 'open' && (
-            <button className="btn-white btn-sm ml-auto" onClick={() => void e.closeVote()}>
-              ■ Close vote & reveal
-            </button>
+            <>
+              <VoteClock s={s} e={e} />
+              <button className="btn-white btn-sm" onClick={() => void e.closeVote()}>
+                ■ Close now & reveal
+              </button>
+            </>
           )}
           {poll?.status === 'closed' && <span className="text-xs text-white/50 ml-auto">Vote closed — winner set from votes (you can still change it above)</span>}
         </div>
@@ -557,5 +560,29 @@ function SoundCard({ s, e }: { s: PublicState; e: HostEngine }) {
         </div>
       )}
     </Card>
+  );
+}
+
+function VoteClock({ s, e }: { s: PublicState; e: HostEngine }) {
+  const at = useNow(s.timer.status === 'running', 4);
+  if (s.timer.label !== 'Audience vote') return <span className="ml-auto" />;
+  const rem = timerRemaining(s.timer, at);
+  return (
+    <span className="ml-auto flex items-center gap-1.5">
+      <span className={`font-condensed text-2xl tabular-nums ${rem <= 10000 ? 'text-ban-bright' : 'text-gold'}`}>{fmtClockFull(rem)}</span>
+      <span className="text-[10px] text-white/45">auto-closes</span>
+      <button className="btn-ghost btn-sm" onClick={() => e.timerAdd(15)} title="Give the audience 15 more seconds">
+        +15s
+      </button>
+      {s.timer.status === 'running' ? (
+        <button className="btn-ghost btn-sm" onClick={e.timerPause}>
+          ❚❚
+        </button>
+      ) : (
+        <button className="btn-ghost btn-sm" onClick={e.timerStart}>
+          ▶
+        </button>
+      )}
+    </span>
   );
 }

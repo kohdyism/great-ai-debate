@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { VoteBars, useRanking } from '../components/Widgets';
 import { currentDebate, currentTopic, roundLabel, teamName } from '../lib/engine';
-import { useViewerState } from '../lib/hooks';
+import { useNow, useViewerState } from '../lib/hooks';
+import { fmtClockFull, timerRemaining } from '../lib/time';
+import type { TimerState } from '../lib/types';
 import { getTransport, type VoteResult } from '../lib/transport';
 import type { PollState, PublicState } from '../lib/types';
 import { safeGet, safeJson, safeSet } from '../lib/util';
@@ -193,7 +195,7 @@ function Live({ s, room, pid, votes, saveVote }: { s: PublicState; room: string;
   const p = s.poll;
   if (s.status === 'paused') return <Waiting title="Short break" body="We’ll be right back." />;
   if (p && p.status === 'open') {
-    return votes[p.id] ? <Voted poll={p} option={votes[p.id]} /> : <Ballot key={p.id} poll={p} room={room} pid={pid} onVoted={(o) => saveVote(p.id, o)} />;
+    return votes[p.id] ? <Voted poll={p} option={votes[p.id]} /> : <Ballot key={p.id} poll={p} room={room} pid={pid} timer={s.timer.label === 'Audience vote' ? s.timer : null} onVoted={(o) => saveVote(p.id, o)} />;
   }
   if (s.screen === 'champion') return <Final s={s} />;
   if (p && p.status === 'closed' && p.results && s.cur.step === 'verdict') return <Closed poll={p} mine={votes[p.id]} />;
@@ -244,7 +246,9 @@ function MiniScores({ s }: { s: PublicState }) {
   );
 }
 
-function Ballot({ poll, room, pid, onVoted }: { poll: PollState; room: string; pid: string; onVoted: (o: string) => void }) {
+function Ballot({ poll, room, pid, timer, onVoted }: { poll: PollState; room: string; pid: string; timer: TimerState | null; onVoted: (o: string) => void }) {
+  const at = useNow(!!timer && timer.status === 'running', 4);
+  const rem = timer ? timerRemaining(timer, at) : null;
   const [sel, setSel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -267,7 +271,10 @@ function Ballot({ poll, room, pid, onVoted }: { poll: PollState; room: string; p
   };
   return (
     <div className="flex-1 flex flex-col py-4">
-      <span className="chip bg-ban text-white self-start">● VOTING OPEN</span>
+      <div className="flex items-center justify-between">
+        <span className="chip bg-ban text-white">● VOTING OPEN</span>
+        {rem != null && <span className={`font-condensed text-2xl tabular-nums ${rem <= 10000 ? 'text-ban-bright' : 'text-gold'}`}>⏱ {fmtClockFull(rem)}</span>}
+      </div>
       <h1 className="font-display text-[30px] leading-[1.05] mt-3">{poll.question}</h1>
       <div className="mt-6 space-y-3" role="radiogroup" aria-label={poll.question}>
         {poll.options.map((o) => {

@@ -30,6 +30,8 @@ export interface Settings {
   rebuttalSec: number;
   /** closing summary (0 = skip) */
   summarySec: number;
+  /** audience vote countdown; voting closes automatically at 0 */
+  voteSec: number;
   winPoints: number;
   drawPoints: number;
   spinMs: number;
