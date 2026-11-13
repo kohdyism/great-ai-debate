@@ -17,27 +17,30 @@ function smartLower(t: string) {
 }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+// Deliberately provocative: bold, absolute claims — half poke the "pro" side, half the "anti" side.
 const TEMPLATES = [
-  '{T} does more good than harm.',
-  '{T} should be banned.',
-  'Governments should regulate {t} much more strictly.',
-  'The world would be better off without {t}.',
-  '{T} is massively overrated.',
-  'Every school should teach students about {t}.',
-  '{T} will be unrecognisable in 20 years.',
-  'Young people understand {t} better than their parents do.',
-  'Big companies profit too much from {t}.',
-  'We should spend more public money on {t}.',
-  '{T} makes people less happy.',
-  'Access to {t} should be a right, not a luxury.',
-  'The benefits of {t} are shared unfairly.',
-  'Most people’s opinions about {t} are based on myths.',
-  'When it comes to {t}, tradition should beat innovation.',
-  'You can’t stay neutral about {t}.',
-  'In ten years we will regret how we handled {t}.',
-  'Individuals, not governments, should make the rules on {t}.',
-  'Universities should take {t} far more seriously.',
-  'The risks of {t} are exaggerated by the media.',
+  '{T} is ruining our generation.',
+  '{T} should be banned outright — no exceptions.',
+  '{T} is the biggest scam of the century.',
+  'We would all be happier if {t} disappeared tomorrow.',
+  'People who love {t} are part of the problem.',
+  '{T} is a toy for the rich, not progress for everyone.',
+  'Governments are cowards for not cracking down on {t}.',
+  '{T} has done more harm than good — and deep down we all know it.',
+  'Criticising {t} is just fear of change.',
+  'In 20 years, {t} will be seen as a massive mistake.',
+  '{T} should be illegal for under-18s.',
+  'Your parents were right about {t}.',
+  'Banning {t} would be an attack on our freedom.',
+  '{T} is the best thing to happen to our generation.',
+  'Nobody actually needs {t}.',
+  'Anyone making money from {t} should be taxed until it hurts.',
+  'Opting out of {t} is a privilege most people can’t afford.',
+  '{T} makes us lonelier, dumber and angrier.',
+  'If you’re not worried about {t}, you’re not paying attention.',
+  'The panic about {t} is just old people being scared.',
+  'The hype around {t} is 90% marketing.',
+  'Our generation will be judged harshly for {t}.',
 ];
 
 export function templateStatements(topic: string, n: number, avoid: string[] = []): string[] {
@@ -69,13 +72,15 @@ async function callClaude(key: string, model: string, prompt: string) {
 export async function aiStatements(topic: string, n: number, avoid: string[] = []): Promise<{ statements: string[]; source: 'ai' | 'builtin'; error?: string }> {
   const key = getApiKey();
   if (!key) return { statements: templateStatements(topic, n, avoid), source: 'builtin' };
-  const prompt = `You are writing statements for a live student debate gameshow.
+  const prompt = `You are writing statements for a loud, fun, live student debate gameshow.
 Topic: "${topic}"
-Write ${n} debate statements about this topic. Rules:
-- Each is ONE clear, punchy statement (max 14 words) that one team can argue FOR and another AGAINST.
-- Genuinely two-sided: reasonable people disagree. No facts-with-one-right-answer, nothing offensive.
-- Varied angles: ethics, practical, personal life, policy, the future, and one light-hearted one.
-- Easy to understand instantly when read off a big screen.
+Write ${n} PROVOCATIVE debate statements about this topic. Rules:
+- Bold, spicy and contrarian: the kind of line that makes the audience gasp, laugh or shout "no way!".
+- Use strong, absolute wording ("should be banned", "is a scam", "is ruining", "deserves to die out", "is the best thing ever").
+- Each is ONE punchy statement, max 14 words, instantly understandable on a big screen.
+- Genuinely two-sided: a smart team could argue FOR it and another AGAINST it. Mix ones that provoke supporters and ones that provoke critics.
+- Varied angles: personal life, money, ethics, the future, policy, and one cheeky/funny one.
+- No hate, slurs or attacks on protected groups or real private individuals; no factual quiz statements.
 ${avoid.length ? `- Do not repeat or closely paraphrase these: ${avoid.map((a) => `"${a}"`).join('; ')}` : ''}
 Reply with ONLY a JSON array of ${n} strings.`;
   for (const model of ['claude-haiku-5-5', 'claude-sonnet-5-5']) {
