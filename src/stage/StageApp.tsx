@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { StageCanvas, Backdrop } from '../components/StageKit';
 import { fireConfetti, wheelAngle } from '../components/Widgets';
+import { HOST_PUB_KEY, currentTopic } from '../lib/engine';
 import { useViewerState } from '../lib/hooks';
 import { audioUnlocked, sfx, unlockAudio } from '../lib/sound';
 import { now, timerRemaining } from '../lib/time';
@@ -11,9 +12,7 @@ import { HomeScreen, MessageScreen, StageScreen } from './Screens';
 
 function resolveRoom(param: string | null): string | null {
   if (param) return param.toUpperCase();
-  // Same computer as the host? Use the host's room automatically.
-  const hostPub = safeJson<PublicState>('gad:host:public:v1');
-  return hostPub?.roomCode ?? null;
+  return safeJson<PublicState>(HOST_PUB_KEY)?.roomCode ?? null;
 }
 
 export default function StageApp({ room: roomParam }: { room: string | null }) {
@@ -23,7 +22,6 @@ export default function StageApp({ room: roomParam }: { room: string | null }) {
   const [audioReady, setAudioReady] = useState(audioUnlocked());
   const [cursorHidden, setCursorHidden] = useState(false);
 
-  // Keyboard: F = full screen. Clicking anywhere unlocks audio.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'f' || e.key === 'F') toggleFullscreen();
@@ -89,7 +87,6 @@ export default function StageApp({ room: roomParam }: { room: string | null }) {
         )}
         <Flash state={state} />
 
-        {/* Status corner — subtle on purpose */}
         <div className="absolute bottom-3 right-4 z-50 flex items-center gap-3 text-[15px] font-body text-white/50">
           {state?.backend === 'demo' && <span className="chip bg-gold/15 text-gold border border-gold/30">DEMO MODE</span>}
           {live && (
@@ -119,55 +116,45 @@ function Flash({ state }: { state: PublicState | null }) {
   return <div key={id} className="absolute inset-0 z-40 pointer-events-none bg-white" style={{ animation: 'flash 0.9s ease-out both' }} />;
 }
 
-/** Sound + confetti driven purely by state changes (so refreshes never replay old effects). */
+/** Sound + confetti driven by state changes. */
 function useStageEffects(s: PublicState | null, audio: boolean) {
   const prev = useRef<PublicState | null>(null);
   const seenFx = useRef<string | null>(null);
   const lastSec = useRef<number | null>(null);
   const lastSeg = useRef<number | null>(null);
-  const cdSec = useRef<number | null>(null);
-  const firstLoad = useRef(true);
+  const first = useRef(true);
 
   useEffect(() => {
     if (!s) return;
     const p = prev.current;
     prev.current = s;
     const sound = s.sound && audio;
-    if (firstLoad.current) {
-      firstLoad.current = false;
+    if (first.current) {
+      first.current = false;
       seenFx.current = s.fx?.id ?? null;
       return;
     }
-    // FX
     if (s.fx && s.fx.id !== seenFx.current) {
       seenFx.current = s.fx.id;
-      const fresh = now() - s.updatedAt < 5000;
-      if (fresh) {
+      if (now() - s.updatedAt < 5000) {
         if (s.fx.kind === 'confetti') {
           fireConfetti(true);
           if (sound) sfx.fanfare();
-        } else if (s.fx.kind === 'points') {
-          if (sound) (s.fx.delta ?? 0) >= 0 ? sfx.points() : sfx.buzzer();
-        } else if (s.fx.kind === 'flash' && sound) sfx.whoosh();
+        } else if (s.fx.kind === 'points' && sound) sfx.points();
+        else if (s.fx.kind === 'flash' && sound) sfx.whoosh();
       }
     }
     if (!p || !sound) return;
     if (s.poll && s.poll.status === 'open' && p.poll?.id !== s.poll.id) sfx.ding();
-    if (s.poll?.revealed && p.poll && !p.poll.revealed && p.poll.id === s.poll.id) sfx.reveal();
-    if (s.card.id && s.card.id !== p.card.id) sfx.reveal();
-    if (s.card.locksRevealed && !p.card.locksRevealed) sfx.boom();
-    if (s.roulette.status === 'revealed' && p.roulette.status !== 'revealed') sfx.reveal();
-    if (s.screen === 'roundIntro' && p.screen !== 'roundIntro') sfx.boom();
-    if (s.screen === 'countdown' && p.screen !== 'countdown' && s.countdown) sfx.drumroll(s.countdown.seconds);
+    if (s.cur.step === 'intro' && p.cur.step !== 'intro') sfx.boom();
+    if (s.cur.step === 'reveal' && p.cur.step === 'spin') sfx.reveal();
   }, [s, audio]);
 
-  // Frame loop for timer ticks, wheel clicks and countdown beats.
   useEffect(() => {
     let raf = 0;
     const loop = () => {
       const st = prev.current;
       if (st && st.sound && audio) {
-        // timer
         if (st.timer.status === 'running') {
           const sec = Math.ceil(timerRemaining(st.timer) / 1000);
           if (lastSec.current !== null && sec !== lastSec.current) {
@@ -176,25 +163,18 @@ function useStageEffects(s: PublicState | null, audio: boolean) {
           }
           lastSec.current = sec;
         } else lastSec.current = null;
-        // wheel
-        const r = st.roulette;
-        if (r.status === 'spinning' && st.screen === 'roulette') {
+        const w = st.wheel;
+        if (w.status === 'spinning') {
           const t = now();
-          const ang = wheelAngle(r, t);
-          const segs = Math.max(1, st.wheel.length);
-          const seg = Math.floor(ang / (360 / segs));
-          if (lastSeg.current !== null && seg !== lastSeg.current && t < r.startedAt + r.durationMs) sfx.wheelTick();
-          if (lastSeg.current !== null && t >= r.startedAt + r.durationMs && lastSeg.current !== -1) {
+          const segs = Math.max(1, currentTopic(st)?.questions.length ?? 6);
+          const seg = Math.floor(wheelAngle(w, t) / (360 / segs));
+          const done = t >= w.startedAt + w.durationMs;
+          if (!done && lastSeg.current !== null && lastSeg.current !== -1 && seg !== lastSeg.current) sfx.wheelTick();
+          if (done && lastSeg.current !== -1) {
             sfx.boom();
             lastSeg.current = -1;
-          } else if (t < r.startedAt + r.durationMs) lastSeg.current = seg;
+          } else if (!done) lastSeg.current = seg;
         } else lastSeg.current = null;
-        // verdict countdown
-        if (st.screen === 'countdown' && st.countdown) {
-          const left = Math.ceil((st.countdown.seconds * 1000 - (now() - st.countdown.startedAt)) / 1000);
-          if (cdSec.current !== null && left !== cdSec.current && left >= 0) left <= 3 ? sfx.tickLow() : sfx.tick();
-          cdSec.current = left;
-        } else cdSec.current = null;
       }
       raf = requestAnimationFrame(loop);
     };

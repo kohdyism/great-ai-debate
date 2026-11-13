@@ -5,9 +5,9 @@ import { Backdrop } from '../components/StageKit';
 
 export function Card({ title, right, children, className = '' }: { title?: ReactNode; right?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={`h-card p-3 ${className}`}>
+    <section className={`h-card p-4 ${className}`}>
       {(title || right) && (
-        <div className="flex items-center justify-between mb-2 gap-2">
+        <div className="flex items-center justify-between mb-3 gap-2">
           <div className="h-title">{title}</div>
           <div className="flex items-center gap-1.5">{right}</div>
         </div>
@@ -17,45 +17,11 @@ export function Card({ title, right, children, className = '' }: { title?: React
   );
 }
 
-/** Button that asks for confirmation before destructive actions. */
 export function ConfirmButton({ msg, onConfirm, className = 'btn-danger', children, disabled }: { msg: string; onConfirm: () => void; className?: string; children: ReactNode; disabled?: boolean }) {
   return (
-    <button
-      className={className}
-      disabled={disabled}
-      onClick={() => {
-        if (window.confirm(msg)) onConfirm();
-      }}
-    >
+    <button className={className} disabled={disabled} onClick={() => window.confirm(msg) && onConfirm()}>
       {children}
     </button>
-  );
-}
-
-export function NumInput({ value, onChange, className = '', min, max, step = 1, ...rest }: { value: number; onChange: (n: number) => void; className?: string; min?: number; max?: number; step?: number; 'aria-label'?: string }) {
-  return (
-    <input
-      type="number"
-      className={`inp !py-1 !px-2 tabular-nums ${className}`}
-      value={Number.isFinite(value) ? value : 0}
-      min={min}
-      max={max}
-      step={step}
-      onChange={(e) => onChange(Number(e.target.value))}
-      {...rest}
-    />
-  );
-}
-
-export function Step({ n, label, active, done, children }: { n: number | string; label: string; active?: boolean; done?: boolean; children?: ReactNode }) {
-  return (
-    <div className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${active ? 'bg-gold/10 border border-gold/40' : 'border border-transparent'}`}>
-      <span className={`w-6 h-6 shrink-0 rounded-full text-[11px] font-bold flex items-center justify-center ${done ? 'bg-emerald-500 text-black' : active ? 'bg-gold text-black' : 'bg-white/10 text-white/70'}`}>
-        {done ? '✓' : n}
-      </span>
-      <span className="text-sm flex-1 min-w-0">{label}</span>
-      <div className="flex items-center gap-1 shrink-0">{children}</div>
-    </div>
   );
 }
 
@@ -81,11 +47,9 @@ export function StagePreview({ s }: { s: PublicState }) {
         ) : (
           <StageScreen s={s} />
         )}
-        {s.status === 'paused' && (
-          <div className="absolute inset-0 bg-black/80 flex items-center justify-center font-display text-[120px]">PAUSED</div>
-        )}
+        {s.status === 'paused' && <div className="absolute inset-0 bg-black/80 flex items-center justify-center font-display text-[120px]">PAUSED</div>}
       </div>
-      <div className="absolute top-2 left-2 chip bg-black/70 text-white/80 border border-white/15">STAGE PREVIEW</div>
+      <div className="absolute top-2 left-2 chip bg-black/70 text-white/80 border border-white/15">ON THE PROJECTOR</div>
     </div>
   );
 }

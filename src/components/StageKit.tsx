@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import type { TeamId } from '../lib/types';
-import { TEAM_NAME } from '../lib/types';
+import type { Side } from '../lib/types';
 
 /** Fixed 1920×1080 broadcast canvas, letterboxed to any projector. */
 export function StageCanvas({ children }: { children: ReactNode }) {
@@ -141,29 +140,11 @@ export function TitleLockup({ size = 1, className = '' }: { size?: number; class
   );
 }
 
-export function Podium({
-  team,
-  active = false,
-  dim = false,
-  scale = 1,
-  label = true,
-  children,
-}: {
-  team: TeamId;
-  active?: boolean;
-  dim?: boolean;
-  scale?: number;
-  label?: boolean;
-  children?: ReactNode;
-}) {
-  const blue = team === 'embrace';
+export function Podium({ side, name, active = false, dim = false, scale = 1 }: { side: Side; name: string; active?: boolean; dim?: boolean; scale?: number }) {
+  const blue = side === 'for';
   const w = 300 * scale;
   return (
-    <div
-      className={`podium ${blue ? 'podium-blue' : 'podium-red'} ${dim ? 'dim' : ''} transition-all duration-500`}
-      style={{ width: w, filter: active ? 'brightness(1.25)' : undefined }}
-    >
-      {/* microphone */}
+    <div className={`podium ${blue ? 'podium-blue' : 'podium-red'} ${dim ? 'dim' : ''} transition-all duration-500`} style={{ width: w, filter: active ? 'brightness(1.25)' : undefined }}>
       <div className="absolute" style={{ left: blue ? w * 0.62 : w * 0.3, top: -70 * scale }}>
         <div className="bg-neutral-700 rounded-full" style={{ width: 4 * scale, height: 70 * scale, transform: `rotate(${blue ? 20 : -20}deg)`, transformOrigin: 'bottom' }} />
         <div className="absolute bg-neutral-800 border border-neutral-600 rounded-full" style={{ width: 14 * scale, height: 26 * scale, top: -14 * scale, left: blue ? 10 * scale : -16 * scale, transform: `rotate(${blue ? 20 : -20}deg)` }} />
@@ -172,31 +153,17 @@ export function Podium({
       <div className="podium-body rounded-sm flex flex-col items-center justify-center relative overflow-hidden" style={{ height: 300 * scale, marginTop: 4 * scale }}>
         <div className="absolute inset-y-4 border-2 rounded-sm" style={{ left: 24 * scale, right: 24 * scale, borderColor: blue ? 'rgba(58,141,255,0.65)' : 'rgba(255,58,72,0.65)' }} />
         {active && <div className="absolute inset-0 anim-pulse" style={{ background: blue ? 'radial-gradient(circle at 50% 30%, rgba(80,160,255,0.35), transparent 70%)' : 'radial-gradient(circle at 50% 30%, rgba(255,80,90,0.35), transparent 70%)' }} />}
-        <div className="relative z-10 text-center px-4">
-          {label && (
-            <div className={`font-display uppercase ${blue ? 'glow-blue' : 'glow-red'}`} style={{ fontSize: 34 * scale, lineHeight: 1 }}>
-              <div className="text-white/80" style={{ fontSize: 18 * scale, letterSpacing: '0.3em' }}>
-                TEAM
-              </div>
-              {blue ? 'EMBRACE' : 'BAN'}
-            </div>
-          )}
-          {children}
+        <div className="relative z-10 text-center px-8">
+          <div className={`font-condensed tracking-[0.3em] ${blue ? 'text-embrace-bright' : 'text-ban-bright'}`} style={{ fontSize: 26 * scale }}>
+            {blue ? 'FOR' : 'AGAINST'}
+          </div>
+          <div className={`font-display uppercase leading-[1] mt-2 break-words ${blue ? 'glow-blue' : 'glow-red'}`} style={{ fontSize: (name.length > 14 ? 30 : name.length > 9 ? 36 : 44) * scale }}>
+            {name}
+          </div>
         </div>
       </div>
       <div className="podium-base rounded-sm" style={{ height: 16 * scale, marginLeft: -24 * scale, marginRight: -24 * scale, marginTop: 6 * scale, background: '#0a0c14' }} />
     </div>
-  );
-}
-
-export function TeamTag({ team, className = '' }: { team: TeamId; className?: string }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-2 font-display uppercase ${team === 'embrace' ? 'text-embrace-bright glow-blue' : 'text-ban-bright glow-red'} ${className}`}
-    >
-      <span className={`inline-block w-3 h-3 rounded-full ${team === 'embrace' ? 'bg-embrace' : 'bg-ban'}`} />
-      {TEAM_NAME[team]}
-    </span>
   );
 }
 

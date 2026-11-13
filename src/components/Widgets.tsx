@@ -3,81 +3,68 @@ import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
 import { useAnimatedNumber, useNow } from '../lib/hooks';
 import { fmtClock, timerRemaining } from '../lib/time';
-import type { Fx, PollState, PublicState, RouletteState, TeamId, TimerState, WheelCat } from '../lib/types';
-import { ROUNDS, roundMeta } from '../lib/types';
+import type { PollState, PublicState, TimerState, WheelState } from '../lib/types';
 import { WHEEL_COLORS } from '../lib/content';
 import { useBlip } from './StageKit';
 
-// ───────────────────────── Animated number ─────────────────────────
 export function AnimatedNumber({ value, className = '' }: { value: number; className?: string }) {
   const v = useAnimatedNumber(value, 900);
   return <span className={className}>{Math.round(v)}</span>;
 }
 
-// ───────────────────────── Stage score bar ─────────────────────────
-export function StageScoreBar({ s }: { s: PublicState }) {
-  const meta = roundMeta(s.round);
-  const lead: TeamId | null = s.scores.embrace === s.scores.ban ? null : s.scores.embrace > s.scores.ban ? 'embrace' : 'ban';
+/** Ranked list of teams with scores (handles any number of teams). */
+export function useRanking(s: PublicState) {
+  return useMemo(() => {
+    const list = s.teams.map((t) => ({ ...t, score: s.scores[t.id] ?? 0 }));
+    list.sort((a, b) => b.score - a.score);
+    return list.map((t) => ({ ...t, rank: list.findIndex((x) => x.score === t.score) + 1 }));
+  }, [s.teams, s.scores]);
+}
+
+// ───────────────────────── Stage score strip ─────────────────────────
+export function StageScoreBar({ s, left }: { s: PublicState; left: string }) {
+  const ranked = useRanking(s);
   const fx = s.fx?.kind === 'points' ? s.fx : null;
+  const top = ranked[0]?.score ?? 0;
+  const many = s.teams.length >= 5;
+  const maxW = Math.floor(1520 / Math.max(1, s.teams.length)) - (many ? 70 : 100);
   return (
-    <div className="absolute top-0 left-0 right-0 h-[118px] flex items-stretch z-30">
-      <TeamScore team="embrace" score={s.scores.embrace} lead={lead === 'embrace'} fx={fx} speaking={s.spotlight === 'embrace'} />
-      <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-b from-black/80 to-black/30 border-b border-white/10">
-        <div className="font-condensed text-[22px] tracking-[0.35em] text-white/60">
-          {meta.num ? `ROUND ${meta.num} OF 5` : meta.id === 'roulette' ? 'BONUS ROUND' : 'THE GREAT AI DEBATE'}
+    <div className="absolute top-0 left-0 right-0 h-[96px] flex items-stretch z-30 bg-gradient-to-b from-black/85 to-black/40 border-b border-white/10">
+      <div className="flex flex-col justify-center pl-8 pr-6 border-r border-white/10 w-[360px] shrink-0">
+        <div className="font-display leading-[0.85] text-[24px] whitespace-nowrap">
+          THE GREAT <span className="text-ai">AI</span> <span className="text-debate">DEBATE</span>
         </div>
-        <div className="font-display text-[44px] leading-none text-white glow-white uppercase">{meta.short}</div>
-        <div className="flex gap-2 mt-2">
-          {ROUNDS.filter((r) => r.num).map((r) => (
-            <div
-              key={r.id}
-              className={`h-[6px] w-12 rounded-full ${
-                r.id === s.round ? 'bg-gold shadow-[0_0_10px_rgba(247,215,116,0.9)]' : (r.num ?? 0) < (meta.num ?? 0) ? 'bg-white/60' : 'bg-white/15'
-              }`}
-            />
-          ))}
-        </div>
+        <div className="font-condensed tracking-[0.2em] text-white/60 text-[19px] mt-1 whitespace-nowrap truncate">{left}</div>
       </div>
-      <TeamScore team="ban" score={s.scores.ban} lead={lead === 'ban'} fx={fx} speaking={s.spotlight === 'ban'} />
+      <div className="flex-1 flex items-center justify-center gap-2 px-3 min-w-0">
+        {s.teams.map((t) => {
+          const score = s.scores[t.id] ?? 0;
+          const leading = score === top && top > 0;
+          const burst = fx && fx.team === t.id ? fx : null;
+          return <ScoreChip key={t.id} name={t.name} score={score} leading={leading} burstId={burst?.id} delta={burst?.delta} compact={many} maxW={maxW} />;
+        })}
+      </div>
     </div>
   );
 }
 
-function TeamScore({ team, score, lead, fx, speaking }: { team: TeamId; score: number; lead: boolean; fx: Fx | null; speaking: boolean }) {
-  const blue = team === 'embrace';
-  const burst = fx && fx.team === team ? fx : null;
-  const blip = useBlip(burst?.id);
+function ScoreChip({ name, score, leading, burstId, delta, compact, maxW }: { name: string; score: number; leading: boolean; burstId?: string; delta?: number; compact: boolean; maxW: number }) {
+  const blip = useBlip(burstId);
   return (
     <div
-      className={`relative w-[600px] flex items-center ${blue ? 'flex-row pl-10' : 'flex-row-reverse pr-10'} gap-6 ${
-        blue ? 'bg-gradient-to-r from-embrace/50 via-embrace/15 to-transparent' : 'bg-gradient-to-l from-ban/50 via-ban/15 to-transparent'
-      }`}
-      style={{ borderBottom: `4px solid ${blue ? '#3a8dff' : '#ff3a48'}`, boxShadow: `0 6px 30px ${blue ? 'rgba(40,130,255,0.45)' : 'rgba(255,45,61,0.45)'}` }}
+      className={`relative flex items-center gap-2 rounded-xl px-3 py-2 border ${leading ? 'border-gold/70 bg-gold/10 shadow-[0_0_20px_rgba(247,215,116,0.35)]' : 'border-white/15 bg-white/5'}`}
     >
-      <div className={`${blue ? 'text-left' : 'text-right'}`}>
-        <div className="font-condensed text-[20px] tracking-[0.3em] text-white/70 flex items-center gap-2" style={{ justifyContent: blue ? 'flex-start' : 'flex-end' }}>
-          {speaking && <span className="w-3 h-3 rounded-full bg-white anim-pulse" />}
-          TEAM
-          {lead && <span className="text-gold glow-gold tracking-[0.2em]">★ LEADING</span>}
-        </div>
-        <div className={`font-display text-[52px] leading-none ${blue ? 'glow-blue' : 'glow-red'}`}>{blue ? 'EMBRACE' : 'BAN'}</div>
+      <div className={`font-display uppercase ${compact ? 'text-[18px] leading-[1.05] line-clamp-2' : 'text-[24px] truncate'} ${leading ? 'text-gold' : 'text-white'}`} style={{ maxWidth: maxW }}>
+        {leading && '★ '}
+        {name}
       </div>
-      <div
-        className={`font-condensed text-[96px] leading-none tabular-nums ${blip ? 'text-gold glow-gold' : 'text-white glow-white'} transition-colors duration-500`}
-        style={{ minWidth: 150, textAlign: 'center' }}
-      >
+      <div className={`font-condensed tabular-nums leading-none ${compact ? 'text-[40px]' : 'text-[48px]'} ${blip ? 'text-gold glow-gold' : 'text-white'}`}>
         <AnimatedNumber value={score} />
       </div>
-      {burst && (
-        <div
-          key={burst.id}
-          className={`absolute ${blue ? 'left-[380px]' : 'right-[380px]'} top-[124px] font-condensed text-[84px] ${
-            (burst.delta ?? 0) >= 0 ? 'text-gold glow-gold' : 'text-ban-bright glow-red'
-          }`}
-          style={{ animation: 'float-up 2.2s ease-out both' }}
-        >
-          {(burst.delta ?? 0) > 0 ? '+' : ''}
-          {burst.delta}
+      {burstId && (
+        <div key={burstId} className="absolute left-1/2 -translate-x-1/2 top-[70px] font-condensed text-[60px] text-gold glow-gold" style={{ animation: 'float-up 2.2s ease-out both' }}>
+          {(delta ?? 0) > 0 ? '+' : ''}
+          {delta}
         </div>
       )}
     </div>
@@ -91,13 +78,13 @@ export function BigTimer({ t, size = 360, showLabel = true }: { t: TimerState; s
   const frac = t.totalMs > 0 ? rem / t.totalMs : 0;
   const done = rem <= 0 && (t.status === 'running' || t.status === 'paused');
   const urgent = rem > 0 && rem <= 10_000 && t.status === 'running';
-  const color = t.team === 'embrace' ? '#3a8dff' : t.team === 'ban' ? '#ff3a48' : '#f7d774';
+  const color = t.side === 'for' ? '#3a8dff' : t.side === 'against' ? '#ff3a48' : '#f7d774';
   const r = size / 2 - 18;
   const c = 2 * Math.PI * r;
   return (
     <div className="flex flex-col items-center">
       {showLabel && (
-        <div className="font-condensed uppercase tracking-[0.25em] text-white/80 mb-3" style={{ fontSize: size * 0.085 }}>
+        <div className="font-condensed uppercase tracking-[0.25em] text-white/80 mb-3 text-center" style={{ fontSize: Math.max(18, size * 0.075) }}>
           {t.label}
         </div>
       )}
@@ -123,10 +110,7 @@ export function BigTimer({ t, size = 360, showLabel = true }: { t: TimerState; s
               TIME!
             </div>
           ) : (
-            <div
-              className={`font-condensed tabular-nums leading-none ${urgent ? 'text-ban-bright glow-red' : 'text-white glow-white'}`}
-              style={{ fontSize: size * 0.4 }}
-            >
+            <div className={`font-condensed tabular-nums leading-none ${urgent ? 'text-ban-bright glow-red' : 'text-white glow-white'}`} style={{ fontSize: size * 0.4 }}>
               {fmtClock(rem)}
             </div>
           )}
@@ -141,107 +125,52 @@ export function BigTimer({ t, size = 360, showLabel = true }: { t: TimerState; s
   );
 }
 
-// ───────────────────────── Vote bars ─────────────────────────
-export function VoteBars({ poll, big = true, showCounts = true }: { poll: PollState; big?: boolean; showCounts?: boolean }) {
+// ───────────────────────── Vote bars (FOR blue left / AGAINST red right) ─────────────────────────
+export function VoteBars({ poll, big = true }: { poll: PollState; big?: boolean }) {
   const r = poll.results;
   if (!r) return null;
+  const [a, b] = poll.options;
+  if (!a || !b) return null;
   const total = r.total;
-  const opts = poll.options;
-  const isTeamSplit = opts.some((o) => o.id === 'embrace') && opts.some((o) => o.id === 'ban');
-  const pctOf = (id: string) => (total ? ((r.counts[id] ?? 0) / total) * 100 : 0);
-  const colorOf = (id: string, i: number) =>
-    id === 'embrace' ? '#1f7bff' : id === 'ban' ? '#ff2d3d' : id === 'fact' ? '#1f7bff' : id === 'fiction' ? '#ff2d3d' : i % 2 ? '#ff2d3d' : '#1f7bff';
-
-  if (isTeamSplit) {
-    const e = pctOf('embrace');
-    const b = pctOf('ban');
-    const n = 100 - e - b;
-    const eLabel = opts.find((o) => o.id === 'embrace')!.label;
-    const bLabel = opts.find((o) => o.id === 'ban')!.label;
-    return (
-      <div className="w-full">
-        <div className="flex items-end justify-between mb-4">
-          <div>
-            <div className={`font-condensed leading-none text-embrace-bright glow-blue tabular-nums ${big ? 'text-[150px]' : 'text-6xl'}`}>
-              <AnimatedNumber value={Math.round(e)} />%
-            </div>
-            <div className={`font-display uppercase ${big ? 'text-[34px]' : 'text-lg'}`}>{eLabel}</div>
-            {showCounts && <div className="text-white/60 font-body text-xl">{r.counts.embrace ?? 0} votes</div>}
+  const pa = total ? ((r.counts[a.id] ?? 0) / total) * 100 : 0;
+  const pb = total ? ((r.counts[b.id] ?? 0) / total) * 100 : 0;
+  return (
+    <div className="w-full">
+      <div className="flex items-end justify-between mb-3">
+        <div>
+          <div className={`font-condensed leading-none text-embrace-bright glow-blue tabular-nums ${big ? 'text-[120px]' : 'text-5xl'}`}>
+            <AnimatedNumber value={Math.round(pa)} />%
           </div>
-          {opts.some((o) => o.id === 'neither') && (
-            <div className="text-center pb-2">
-              <div className={`font-condensed text-white/80 ${big ? 'text-6xl' : 'text-3xl'}`}>
-                <AnimatedNumber value={Math.round(n)} />%
-              </div>
-              <div className="font-display text-white/60 uppercase text-lg">Neither / Both</div>
-            </div>
-          )}
-          <div className="text-right">
-            <div className={`font-condensed leading-none text-ban-bright glow-red tabular-nums ${big ? 'text-[150px]' : 'text-6xl'}`}>
-              <AnimatedNumber value={Math.round(b)} />%
-            </div>
-            <div className={`font-display uppercase ${big ? 'text-[34px]' : 'text-lg'}`}>{bLabel}</div>
-            {showCounts && <div className="text-white/60 font-body text-xl">{r.counts.ban ?? 0} votes</div>}
-          </div>
+          <div className={`font-display uppercase ${big ? 'text-[30px]' : 'text-base'}`}>{a.label}</div>
+          <div className={`text-white/60 ${big ? 'text-xl' : 'text-xs'}`}>{r.counts[a.id] ?? 0} votes</div>
         </div>
-        <div className={`relative w-full ${big ? 'h-16' : 'h-8'} rounded-full overflow-hidden bg-white/10 flex border border-white/15`}>
-          <div className="h-full transition-all duration-1000 ease-out sheen" style={{ width: `${e}%`, background: 'linear-gradient(90deg,#0b3fa8,#1f7bff,#3fd2ff)', boxShadow: '0 0 30px #1f7bff' }} />
-          <div className="h-full transition-all duration-1000 ease-out bg-white/25" style={{ width: `${n}%` }} />
-          <div className="h-full transition-all duration-1000 ease-out sheen ml-auto" style={{ width: `${b}%`, background: 'linear-gradient(90deg,#ff5a4f,#ff2d3d,#a3101c)', boxShadow: '0 0 30px #ff2d3d' }} />
-          <div className="absolute left-1/2 top-0 bottom-0 w-[3px] bg-white/70" />
+        <div className="text-right">
+          <div className={`font-condensed leading-none text-ban-bright glow-red tabular-nums ${big ? 'text-[120px]' : 'text-5xl'}`}>
+            <AnimatedNumber value={Math.round(pb)} />%
+          </div>
+          <div className={`font-display uppercase ${big ? 'text-[30px]' : 'text-base'}`}>{b.label}</div>
+          <div className={`text-white/60 ${big ? 'text-xl' : 'text-xs'}`}>{r.counts[b.id] ?? 0} votes</div>
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="w-full space-y-5">
-      {opts.map((o, i) => {
-        const p = pctOf(o.id);
-        const correct = poll.correctOption && poll.revealed ? poll.correctOption === o.id : null;
-        return (
-          <div key={o.id}>
-            <div className="flex justify-between items-end mb-2">
-              <div className={`font-display uppercase ${big ? 'text-4xl' : 'text-lg'} flex items-center gap-3`}>
-                {o.label}
-                {correct === true && <span className="chip bg-gold text-black text-base px-3">CORRECT</span>}
-              </div>
-              <div className={`font-condensed tabular-nums ${big ? 'text-6xl' : 'text-2xl'}`}>
-                <AnimatedNumber value={Math.round(p)} />%
-                {showCounts && <span className="text-white/50 text-xl font-body ml-3">{r.counts[o.id] ?? 0}</span>}
-              </div>
-            </div>
-            <div className={`${big ? 'h-10' : 'h-5'} rounded-full bg-white/10 overflow-hidden`}>
-              <div
-                className="h-full rounded-full transition-all duration-1000 ease-out"
-                style={{ width: `${p}%`, background: colorOf(o.id, i), boxShadow: `0 0 20px ${colorOf(o.id, i)}`, opacity: correct === false ? 0.45 : 1 }}
-              />
-            </div>
-          </div>
-        );
-      })}
+      <div className={`relative w-full ${big ? 'h-12' : 'h-6'} rounded-full overflow-hidden bg-white/10 flex border border-white/15`}>
+        <div className="h-full transition-all duration-1000 ease-out sheen" style={{ width: `${pa}%`, background: 'linear-gradient(90deg,#0b3fa8,#1f7bff,#3fd2ff)' }} />
+        <div className="h-full transition-all duration-1000 ease-out sheen ml-auto" style={{ width: `${pb}%`, background: 'linear-gradient(90deg,#ff5a4f,#ff2d3d,#a3101c)' }} />
+        <div className="absolute left-1/2 top-0 bottom-0 w-[3px] bg-white/70" />
+      </div>
+      {(r.simulatedTotal > 0 || r.manualTotal > 0) && (
+        <div className={`mt-2 text-gold ${big ? 'text-[20px]' : 'text-xs'}`}>
+          Includes {r.simulatedTotal ? `${r.simulatedTotal} simulated` : ''}
+          {r.simulatedTotal && r.manualTotal ? ' + ' : ''}
+          {r.manualTotal ? `${r.manualTotal} show-of-hands` : ''} votes
+        </div>
+      )}
     </div>
-  );
-}
-
-export function SimulatedNote({ poll }: { poll: PollState }) {
-  const r = poll.results;
-  if (!r) return null;
-  const parts: string[] = [];
-  if (r.simulatedTotal) parts.push(`${r.simulatedTotal} SIMULATED`);
-  if (r.manualTotal) parts.push(`${r.manualTotal} SHOW-OF-HANDS`);
-  if (!parts.length) return null;
-  return (
-    <span className="tag bg-gold/15 text-gold border border-gold/40 text-[20px] px-4 py-1">
-      INCLUDES {parts.join(' + ')} VOTES · {r.realTotal} FROM AUDIENCE DEVICES
-    </span>
   );
 }
 
 // ───────────────────────── Roulette wheel ─────────────────────────
 const A = 0.1;
 const T = A / 2 + (1 - A) / 3;
-/** Accelerate for the first 10%, then a long, dramatic deceleration. */
 export function spinEase(k: number) {
   if (k <= 0) return 0;
   if (k >= 1) return 1;
@@ -249,48 +178,32 @@ export function spinEase(k: number) {
   const u = (1 - k) / (1 - A);
   return (A / 2 + ((1 - A) / 3) * (1 - u * u * u)) / T;
 }
-export function wheelAngle(r: RouletteState, at: number) {
-  if (r.status !== 'spinning') return r.toDeg;
-  const k = (at - r.startedAt) / Math.max(1, r.durationMs);
-  return r.fromDeg + (r.toDeg - r.fromDeg) * spinEase(k);
+export function wheelAngle(w: WheelState, at: number) {
+  if (w.status !== 'spinning') return w.toDeg;
+  const k = (at - w.startedAt) / Math.max(1, w.durationMs);
+  return w.fromDeg + (w.toDeg - w.fromDeg) * spinEase(k);
 }
 
-function splitLabel(name: string): string[] {
-  const words = name.split(' ');
-  if (name.length <= 10 || words.length === 1) return [name];
-  let best = [name];
-  let bestDiff = Infinity;
-  for (let i = 1; i < words.length; i++) {
-    const a = words.slice(0, i).join(' ');
-    const b = words.slice(i).join(' ');
-    const d = Math.abs(a.length - b.length);
-    if (d < bestDiff) {
-      bestDiff = d;
-      best = [a, b];
-    }
-  }
-  return best;
-}
-
-export function Wheel({ cats, angle, size = 860, highlight }: { cats: WheelCat[]; angle: number; size?: number; highlight: number | null }) {
-  const n = Math.max(1, cats.length);
+/** Wheel of numbered questions. Used ones are dimmed with a tick. */
+export function Wheel({ count, used, angle, size = 860, highlight }: { count: number; used: boolean[]; angle: number; size?: number; highlight: number | null }) {
+  const n = Math.max(1, count);
   const R = 430;
   const seg = 360 / n;
   const at = useNow(true, 4);
   const lightsOn = Math.floor(at / 350) % 2;
   const paths = useMemo(
     () =>
-      cats.map((_, i) => {
+      Array.from({ length: n }, (_, i) => {
+        if (n === 1) return `M0 ${-R} A${R} ${R} 0 1 1 -0.01 ${-R} Z`;
         const a0 = ((i * seg - 90) * Math.PI) / 180;
         const a1 = (((i + 1) * seg - 90) * Math.PI) / 180;
         const large = seg > 180 ? 1 : 0;
         return `M0 0 L${R * Math.cos(a0)} ${R * Math.sin(a0)} A${R} ${R} 0 ${large} 1 ${R * Math.cos(a1)} ${R * Math.sin(a1)} Z`;
       }),
-    [cats, seg],
+    [n, seg],
   );
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      {/* pointer */}
       <div className="absolute left-1/2 -translate-x-1/2 z-20" style={{ top: -26 }}>
         <svg width="90" height="100" viewBox="0 0 90 100">
           <defs>
@@ -316,51 +229,43 @@ export function Wheel({ cats, angle, size = 860, highlight }: { cats: WheelCat[]
         </defs>
         <circle r="452" fill="#0a0c14" stroke="#f7d774" strokeWidth="6" style={{ filter: 'drop-shadow(0 0 22px rgba(247,215,116,0.55))' }} />
         <g transform={`rotate(${angle})`}>
-          {cats.map((c, i) => {
-            const fill = WHEEL_COLORS[i % WHEEL_COLORS.length];
+          {Array.from({ length: n }, (_, i) => {
+            let fill = WHEEL_COLORS[i % WHEEL_COLORS.length];
+            if (n % 4 === 1 && i === n - 1 && n > 1) fill = '#7a1520';
             const isGold = fill === '#e9b53a';
             const mid = i * seg + seg / 2;
-            const lines = splitLabel(c.name);
             const lit = highlight === i;
+            const dim = (highlight != null && !lit) || (used[i] && !lit);
             return (
-              <g key={c.id}>
-                <path d={paths[i]} fill={fill} stroke="#05060b" strokeWidth="4" opacity={highlight != null && !lit ? 0.45 : 1} />
-                <g transform={`rotate(${mid}) translate(0 ${-R * 0.58}) rotate(-90)`}>
-                  {lines.map((ln, li) => (
-                    <text
-                      key={li}
-                      x={0}
-                      y={(li - (lines.length - 1) / 2) * 34}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontFamily="'Archivo Black', sans-serif"
-                      fontSize={lines.length > 1 ? 27 : 30}
-                      fill={isGold ? '#0b0b10' : '#fff'}
-                      style={{ letterSpacing: '0.01em' }}
-                    >
-                      {ln}
+              <g key={i}>
+                <path d={paths[i]} fill={fill} stroke="#05060b" strokeWidth="4" opacity={dim ? 0.35 : 1} />
+                <g transform={`rotate(${mid}) translate(0 ${-R * 0.66})`}>
+                  <text
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontFamily="Anton, sans-serif"
+                    fontSize={n > 8 ? 80 : 110}
+                    fill={isGold ? '#0b0b10' : '#fff'}
+                    opacity={dim ? 0.5 : 1}
+                    transform={`rotate(${-mid - angle})`}
+                  >
+                    {i + 1}
+                  </text>
+                  {used[i] && !lit && (
+                    <text y={70} textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight={800} fontSize={34} fill="#fff" opacity={0.8} transform={`rotate(${-mid - angle})`}>
+                      ✓
                     </text>
-                  ))}
+                  )}
                 </g>
               </g>
             );
           })}
           <circle r={R} fill="url(#segshade)" />
         </g>
-        {/* rim lights */}
         {Array.from({ length: 32 }).map((_, i) => {
           const a = (i / 32) * Math.PI * 2;
           const on = (i + lightsOn) % 2 === 0;
-          return (
-            <circle
-              key={i}
-              cx={441 * Math.cos(a)}
-              cy={441 * Math.sin(a)}
-              r={6}
-              fill={on ? '#fff3c4' : '#6b5520'}
-              style={on ? { filter: 'drop-shadow(0 0 6px #f7d774)' } : undefined}
-            />
-          );
+          return <circle key={i} cx={441 * Math.cos(a)} cy={441 * Math.sin(a)} r={6} fill={on ? '#fff3c4' : '#6b5520'} style={on ? { filter: 'drop-shadow(0 0 6px #f7d774)' } : undefined} />;
         })}
         <circle r="96" fill="url(#hub)" stroke="#f7d774" strokeWidth="5" />
         <text x="-24" y="18" textAnchor="middle" fontFamily="'Archivo Black', sans-serif" fontSize="58" fill="#3a95ff">
@@ -385,10 +290,7 @@ export function QR({ text, size = 320 }: { text: string; size?: number }) {
   return url ? <img src={url} width={size} height={size} alt={`QR code to join: ${text}`} className="rounded-xl" /> : <div style={{ width: size, height: size }} className="bg-white/10 rounded-xl" />;
 }
 
-export const joinUrl = (room: string) => {
-  const base = `${window.location.origin}${window.location.pathname}`;
-  return `${base}#/play/${room}`;
-};
+export const joinUrl = (room: string) => `${window.location.origin}${window.location.pathname}#/play/${room}`;
 
 // ───────────────────────── Confetti ─────────────────────────
 export function fireConfetti(big = true) {
