@@ -6,29 +6,29 @@ const topic = (id: string, title: string, qs: string[]): Topic => ({ id, title, 
 
 /** Example content — every question is a statement teams can argue FOR or AGAINST. Edit in Host → Setup. */
 export const DEFAULT_TOPICS: Topic[] = [
-  topic('t1', 'AI & the Future of Work', [
-    'AI will make most university degrees worthless within ten years.',
-    'If AI can do your job, you deserve to lose it.',
-    'Bosses should be replaced by AI before workers are.',
-    'Working hard is pointless in the age of AI.',
-    'Refusing to use AI at work should get you fired.',
-    'Companies that replace staff with AI should keep paying their wages.',
+  topic('t1', 'AI & Work', [
+    'AI will take more jobs than it creates.',
+    'AI is good for workers.',
+    'AI makes people lazy.',
+    'Companies should be free to replace humans with AI.',
+    'AI makes the workplace fairer.',
+    'AI skills matter more than a degree.',
   ]),
   topic('t2', 'AI & Creativity', [
-    'AI art is theft, full stop.',
-    'Most human artists are already worse than AI.',
-    'If you used AI, you are not the author.',
-    'AI music will kill the music industry — and it deserves it.',
-    'Prompting is a real art, just like painting.',
-    'Banning AI from creative competitions is pure snobbery.',
+    'AI art is real art.',
+    'AI is killing human creativity.',
+    'Creating with AI is cheating.',
+    'AI will make everyone an artist.',
+    'Some creative work should stay human-only.',
+    'AI makes entertainment better.',
   ]),
   topic('t3', 'AI in Everyday Life', [
-    'Dating an AI is no weirder than dating online.',
-    'Parents who let kids chat to AI are failing them.',
-    'Your phone already knows you better than your friends do.',
-    'AI companions will make human friendship obsolete.',
-    'Anyone still scared of AI is a modern-day dinosaur.',
-    'Humans should be banned from driving once AI drives better.',
+    'AI makes our lives better.',
+    'We rely on AI too much.',
+    'AI is more dangerous than helpful.',
+    'Children should not use AI.',
+    'AI should be strictly regulated.',
+    'We should let AI make decisions for us.',
   ]),
 ];
 
