@@ -4,13 +4,14 @@
 // saved locally (refresh recovery) and pushed to the transport
 // (BroadcastChannel in demo mode, Supabase in live mode).
 // ─────────────────────────────────────────────────────────────
-import { DEFAULT_SETTINGS, DEFAULT_TOPICS, buildSchedule, debateFlow, makeTeams, speechOf, speechSec } from './content';
+import { DEFAULT_PRACTICE, DEFAULT_SETTINGS, DEFAULT_TOPICS, buildSchedule, debateFlow, makeTeams, speechOf, speechSec } from './content';
 import { now, setClockOffset, timerRemaining } from './time';
 import { getLocalBus, getTransport, type ConnStatus, type DemoRequest, type Transport, type VoteResult } from './transport';
 import type {
   Debate,
   MusicSlot,
   PollOption,
+  PracticeSettings,
   PollResults,
   PollState,
   PrivateState,
@@ -52,7 +53,8 @@ export function initialPublic(roomCode: string, backend: 'demo' | 'supabase'): P
     teams,
     topics,
     settings: { ...DEFAULT_SETTINGS },
-    schedule: buildSchedule(teams, topics),
+    practice: clone(DEFAULT_PRACTICE),
+    schedule: buildSchedule(teams, topics, DEFAULT_PRACTICE),
     cur: { round: 0, debate: 0, step: 'intro' },
     scores: Object.fromEntries(teams.map((t) => [t.id, 0])),
     scoreLog: [],
@@ -77,10 +79,18 @@ function initialPrivate(): PrivateState {
 // ── helpers usable by every screen ───────────────────────────
 export const teamName = (s: PublicState, id: string | null | undefined) => s.teams.find((t) => t.id === id)?.name ?? '—';
 export const currentRound = (s: PublicState) => s.schedule[s.cur.round] ?? null;
-export const currentTopic = (s: PublicState): Topic | null => {
-  const r = currentRound(s);
-  return r ? s.topics.find((t) => t.id === r.topicId) ?? null : null;
-};
+export const topicOf = (s: PublicState, r: { topicId: string; practice?: boolean } | null): Topic | null =>
+  !r ? null : r.practice ? s.practice.topic : s.topics.find((t) => t.id === r.topicId) ?? null;
+export const currentTopic = (s: PublicState): Topic | null => topicOf(s, currentRound(s));
+export const isPractice = (s: PublicState) => !!currentRound(s)?.practice;
+/** "PRACTICE ROUND" or "ROUND 2 OF 3" (practice doesn't count towards numbering). */
+export function roundLabel(s: PublicState, ri = s.cur.round, withTotal = true): string {
+  const r = s.schedule[ri];
+  if (r?.practice) return 'PRACTICE ROUND';
+  const offset = s.schedule[0]?.practice ? 1 : 0;
+  const total = s.schedule.length - offset;
+  return `ROUND ${ri - offset + 1}${withTotal ? ` OF ${total}` : ''}`;
+}
 export const currentDebate = (s: PublicState): Debate | null => currentRound(s)?.debates[s.cur.debate] ?? null;
 export const isLastDebate = (s: PublicState) => {
   const r = currentRound(s);
@@ -104,7 +114,7 @@ export function nextLabel(s: PublicState): string {
   if (step === 'verdict') return d?.winner ? 'Show the result' : 'Pick a winner first ↓';
   if (step === 'result') {
     if (!isLastDebate(s)) return `Next: Debate ${s.cur.debate + 2}`;
-    if (!isLastRound(s)) return `Next: Round ${s.cur.round + 2}`;
+    if (!isLastRound(s)) return `Next: ${roundLabel(s, s.cur.round + 1, false).toLowerCase().replace('round', 'Round')}`;
     return 'Final scoreboard';
   }
   const flow = debateFlow(s.settings);
@@ -159,6 +169,22 @@ export class HostEngine {
       this.state = { ...initialPublic(savedPub.roomCode, backend), ...savedPub };
       this.state.settings = { ...DEFAULT_SETTINGS, ...savedPub.settings };
       this.state.music = Object.assign({ on: true, volume: 0.5, custom: {} }, savedPub.music ?? {});
+      // Replace the earlier example topics with the new defaults if the show hasn't started.
+      const OLD_DEFAULTS = ['AI & Work', 'AI & Creativity', 'AI in Everyday Life', 'AI & the Future of Work', 'AI & ASSESSMENT', 'AI IN TEACHING & LEARNING', 'THE FUTURE OF UNIVERSITIES'];
+      const fresh = savedPub.schedule.every((r) => r.debates.every((d) => !d.question && !d.winner));
+      if (fresh && savedPub.topics.some((t) => t.title === 'AI & Creativity' || t.title === 'AI IN TEACHING & LEARNING') && savedPub.topics.every((t) => OLD_DEFAULTS.includes(t.title))) {
+        this.state.topics = clone(DEFAULT_TOPICS);
+        this.state.schedule = buildSchedule(this.state.teams, this.state.topics, savedPub.practice ?? DEFAULT_PRACTICE);
+      }
+      if (!savedPub.practice) {
+        // Older saved show: add the practice round if nothing has been played yet.
+        this.state.practice = clone(DEFAULT_PRACTICE);
+        const untouched = savedPub.schedule.every((r) => r.debates.every((d) => !d.question && !d.winner));
+        if (untouched) {
+          this.state.schedule = buildSchedule(savedPub.teams, savedPub.topics, this.state.practice);
+          this.state.cur = { round: 0, debate: 0, step: 'intro' };
+        } else this.state.practice.enabled = false;
+      }
       this.priv = { ...initialPrivate(), ...savedPriv };
     } else {
       this.state = initialPublic(makeRoomCode(), backend);
@@ -273,6 +299,7 @@ export class HostEngine {
       this.spinTimer = setTimeout(() => this.landSpin(w.spinId!), Math.max(0, w.startedAt + w.durationMs - now()));
     }
     this.ready = true;
+    this.persist();
     this.emit();
     this.schedulePush();
   }
@@ -563,10 +590,12 @@ export class HostEngine {
       w === 'draw' ? { [d.forTeam]: st.drawPoints, [d.againstTeam]: st.drawPoints } : w ? { [w]: st.winPoints } : {};
     const before = pts(prev);
     const after = pts(winner);
-    const label = `Round ${s.cur.round + 1} · Debate ${s.cur.debate + 1}`;
+    const label = `${roundLabel(s, s.cur.round, false)} · Debate ${s.cur.debate + 1}`;
+    const practice = isPractice(s);
     this.update((x) => {
       const dd = currentDebate(x)!;
       dd.winner = winner;
+      if (practice) return; // practice round: no points
       for (const [t, n] of Object.entries(before)) this.addPoints(x, t, -n, `${label}: result changed`);
       for (const [t, n] of Object.entries(after)) this.addPoints(x, t, n, `${label}: ${winner === 'draw' ? 'draw' : 'won'}`);
       const top = Object.entries(after)[0];
@@ -716,19 +745,22 @@ export class HostEngine {
 
   // ── setup ──────────────────────────────────────────────────
   /** Save setup. Changing the number of teams or topics rebuilds the schedule and resets scores. */
-  applySetup = (teams: Team[], topics: Topic[], settings: Settings) => {
+  applySetup = (teams: Team[], topics: Topic[], settings: Settings, practice: PracticeSettings) => {
     const s = this.state;
     const sameShape =
       teams.length === s.teams.length &&
       teams.every((t, i) => t.id === s.teams[i].id) &&
       topics.length === s.topics.length &&
-      topics.every((t, i) => t.id === s.topics[i].id);
+      topics.every((t, i) => t.id === s.topics[i].id) &&
+      practice.enabled === s.practice.enabled &&
+      (!practice.enabled || practice.debates === s.practice.debates);
     this.update((x) => {
       x.teams = teams;
       x.topics = topics;
       x.settings = settings;
+      x.practice = practice;
       if (!sameShape) {
-        x.schedule = buildSchedule(teams, topics);
+        x.schedule = buildSchedule(teams, topics, practice);
         x.scores = Object.fromEntries(teams.map((t) => [t.id, 0]));
         x.scoreLog = [];
         x.cur = { round: 0, debate: 0, step: 'intro' };
@@ -738,7 +770,7 @@ export class HostEngine {
       } else {
         for (const r of x.schedule)
           for (const d of r.debates) {
-            const q = topics.flatMap((t) => t.questions).find((qq) => qq.id === d.questionId);
+            const q = [...topics, practice.topic].flatMap((t) => t.questions).find((qq) => qq.id === d.questionId);
             if (q) d.question = q.text;
           }
       }
@@ -749,10 +781,10 @@ export class HostEngine {
 
   resetShow = () => {
     if (this.spinTimer) clearTimeout(this.spinTimer);
-    const { teams, topics, settings, roomCode, v, sound } = this.state;
+    const { teams, topics, settings, practice, music, roomCode, v, sound } = this.state;
     this.update((s, p) => {
-      Object.assign(s, initialPublic(roomCode, this.transport.kind), { v, sound, teams, topics, settings });
-      s.schedule = buildSchedule(teams, topics);
+      Object.assign(s, initialPublic(roomCode, this.transport.kind), { v, sound, music, teams, topics, settings, practice });
+      s.schedule = buildSchedule(teams, topics, practice);
       s.scores = Object.fromEntries(teams.map((t) => [t.id, 0]));
       p.votes = {};
       p.remote = {};
@@ -763,11 +795,11 @@ export class HostEngine {
     this.toast('Show reset: scores and results cleared. Teams and questions kept.', 'ok');
   };
   newRoom = async () => {
-    const { teams, topics, settings } = this.state;
+    const { teams, topics, settings, practice } = this.state;
     safeRemove(PUB_KEY);
     this.priv = initialPrivate();
-    this.state = { ...initialPublic(makeRoomCode(), this.transport.kind), teams, topics, settings, v: this.state.v + 1 };
-    this.state.schedule = buildSchedule(teams, topics);
+    this.state = { ...initialPublic(makeRoomCode(), this.transport.kind), teams, topics, settings, practice, v: this.state.v + 1 };
+    this.state.schedule = buildSchedule(teams, topics, practice);
     this.state.scores = Object.fromEntries(teams.map((t) => [t.id, 0]));
     if (this.transport.kind === 'supabase') await this.ensureRemoteEvent();
     this.persist();

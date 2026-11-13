@@ -1,4 +1,4 @@
-import type { Debate, RoundPlan, Settings, Side, SpeechStep, Step, Team, Topic } from './types';
+import type { Debate, PracticeSettings, RoundPlan, Settings, Side, SpeechStep, Step, Team, Topic } from './types';
 
 /** Proper debate order: openings (FOR first), counters, then summaries (AGAINST first, FOR has the last word). */
 export const SPEECHES: { step: SpeechStep; side: Side; kind: 'OPENING' | 'COUNTER' | 'SUMMARY'; secKey: 'speechSec' | 'rebuttalSec' | 'summarySec' }[] = [
@@ -24,29 +24,43 @@ const topic = (id: string, title: string, qs: string[]): Topic => ({ id, title, 
 export const DEFAULT_TOPICS: Topic[] = [
   topic('t1', 'AI & Work', [
     'AI will take more jobs than it creates.',
-    'AI is good for workers.',
-    'AI makes people lazy.',
-    'Companies should be free to replace humans with AI.',
+    'Companies should be free to replace workers with AI.',
+    'Using AI at work is cheating.',
     'AI makes the workplace fairer.',
+    'AI should never decide who gets hired.',
     'AI skills matter more than a degree.',
   ]),
-  topic('t2', 'AI & Creativity', [
-    'AI art is real art.',
-    'AI is killing human creativity.',
-    'Creating with AI is cheating.',
-    'AI will make everyone an artist.',
-    'Some creative work should stay human-only.',
-    'AI makes entertainment better.',
+  topic('t2', 'AI & Education', [
+    'AI should be banned from universities.',
+    'AI makes students lazy.',
+    'AI tutors are better than human teachers.',
+    'Using AI for coursework is cheating.',
+    'AI makes education fairer.',
+    'Exams should go back to pen and paper.',
   ]),
-  topic('t3', 'AI in Everyday Life', [
-    'AI makes our lives better.',
+  topic('t3', 'AI & Society', [
+    'AI does more harm than good to society.',
+    'AI should be strictly regulated by governments.',
+    'AI makes the rich richer.',
     'We rely on AI too much.',
-    'AI is more dangerous than helpful.',
-    'Children should not use AI.',
-    'AI should be strictly regulated.',
-    'We should let AI make decisions for us.',
+    'Humans should always have the final say over AI.',
+    'Big tech has too much power over AI.',
   ]),
 ];
+
+/** Light-hearted warm-up so teams learn the format and the audience learns to vote. */
+export const DEFAULT_PRACTICE: PracticeSettings = {
+  enabled: true,
+  debates: 1,
+  topic: topic('practice', 'Warm-up: Just for Fun', [
+    'Cats are better than dogs.',
+    'Pineapple belongs on pizza.',
+    'Summer is better than winter.',
+    'Breakfast is the most important meal.',
+    'Homework should be banned.',
+    'Texting is better than calling.',
+  ]),
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   prepSec: 30,
@@ -68,9 +82,9 @@ export const makeTeams = (n: number, existing: Team[] = []): Team[] =>
  * k changes each round (1, 2, … N−1) so teams meet different opponents.
  * Debates are ordered so the same team rarely speaks twice in a row.
  */
-export function buildSchedule(teams: Team[], topics: Topic[]): RoundPlan[] {
+export function buildSchedule(teams: Team[], topics: Topic[], practice?: PracticeSettings | null): RoundPlan[] {
   const n = teams.length;
-  return topics.map((t, r) => {
+  const roundFor = (t: Topic, r: number): RoundPlan => {
     const k = n > 1 ? 1 + (r % (n - 1)) : 0;
     const pairs: Debate[] = teams.map((_, i) => ({
       id: uid('d'),
@@ -80,10 +94,25 @@ export function buildSchedule(teams: Team[], topics: Topic[]): RoundPlan[] {
       question: null,
       winner: null,
     }));
-    // Reorder: take every other debate first (0,2,4…,1,3,5…) to spread teams out.
+    // Reorder: every other debate first (0,2,4…,1,3,5…) so the same team rarely speaks twice in a row.
     const order = n > 3 ? [...pairs.filter((_, i) => i % 2 === 0), ...pairs.filter((_, i) => i % 2 === 1)] : pairs;
     return { topicId: t.id, debates: order };
-  });
+  };
+  const rounds = topics.map((t, r) => roundFor(t, r));
+  if (practice?.enabled && n >= 2) {
+    // Practice pairs neighbours (1v2, 3v4, …) so different teams get a go.
+    const count = Math.max(1, Math.min(practice.debates, n));
+    const debates: Debate[] = Array.from({ length: count }, (_, i) => ({
+      id: uid('d'),
+      forTeam: teams[(i * 2) % n].id,
+      againstTeam: teams[(i * 2 + 1) % n].id,
+      questionId: null,
+      question: null,
+      winner: null,
+    }));
+    rounds.unshift({ topicId: practice.topic.id, debates, practice: true });
+  }
+  return rounds;
 }
 
 /** Segment colours for the wheel, alternating red / blue / gold / dark. */

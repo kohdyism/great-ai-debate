@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { AnimatedNumber, BigTimer, QR, StageScoreBar, VoteBars, Wheel, joinUrl, useRanking, wheelAngle } from '../components/Widgets';
 import { Backdrop, LedPanel, MotionText, Podium, TitleLockup } from '../components/StageKit';
-import { currentDebate, currentRound, currentTopic, teamName, usedQuestionIds } from '../lib/engine';
+import { currentDebate, currentRound, currentTopic, isPractice, roundLabel, teamName, usedQuestionIds } from '../lib/engine';
 import { SPEECHES, debateFlow, speechOf, speechSec } from '../lib/content';
 import { useNow } from '../lib/hooks';
 import type { PublicState } from '../lib/types';
@@ -11,7 +11,7 @@ const NO_SCOREBAR = new Set(['home', 'champion']);
 export function StageScreen({ s }: { s: PublicState }) {
   const showBar = s.showScoreboard && !NO_SCOREBAR.has(s.screen) && !(s.screen === 'show' && s.cur.step === 'intro');
   const topic = currentTopic(s);
-  const left = s.screen === 'show' || s.screen === 'scoreboard' ? `ROUND ${s.cur.round + 1} OF ${s.schedule.length} · ${(topic?.title ?? '').toUpperCase()}` : `ROOM ${s.roomCode}`;
+  const left = s.screen === 'show' || s.screen === 'scoreboard' ? `${roundLabel(s)} · ${(topic?.title ?? '').toUpperCase()}` : `ROOM ${s.roomCode}`;
   return (
     <>
       <Backdrop dim={s.screen === 'champion' ? 0.25 : 0} crowd={s.screen !== 'scoreboard'} />
@@ -80,7 +80,7 @@ export function HomeScreen({ s, onStart }: { s: PublicState | null; onStart?: ()
       <div className="absolute left-0 right-0 top-[905px] flex items-center justify-center gap-8 font-display text-[40px] anim-rise delay-6">
         {s ? (
           <span className="text-white/90">
-            {s.teams.length} TEAMS · {s.schedule.length} ROUNDS · <span className="text-gold glow-gold">ONE WHEEL</span>
+            {s.teams.length} TEAMS · {s.schedule.filter((r) => !r.practice).length} ROUNDS · <span className="text-gold glow-gold">ONE WHEEL</span>
           </span>
         ) : (
           <span className="text-white/90">
@@ -157,10 +157,10 @@ function RoundIntro({ s }: { s: PublicState }) {
   return (
     <Center key={s.cur.round + (s.fx?.id ?? '')}>
       <div className="font-condensed tracking-[0.5em] text-[44px] text-white/70 anim-rise">
-        ROUND {s.cur.round + 1} OF {s.schedule.length}
+        {roundLabel(s)}
       </div>
       <div className="mt-5 anim-slam delay-1" style={{ maxWidth: 1700 }}>
-        <LedPanel tone={s.cur.round % 3 === 1 ? 'blue' : s.cur.round % 3 === 2 ? 'gold' : 'red'} className="px-20 py-10">
+        <LedPanel tone={isPractice(s) ? 'gold' : s.cur.round % 3 === 1 ? 'blue' : s.cur.round % 3 === 2 ? 'gold' : 'red'} className="px-20 py-10">
           <div className="font-display text-[110px] leading-[0.95] uppercase led-text text-center">{topic?.title}</div>
         </LedPanel>
       </div>
@@ -174,7 +174,13 @@ function RoundIntro({ s }: { s: PublicState }) {
           </div>
         ))}
       </div>
-      <div className="mt-8 font-body text-[26px] text-white/60 anim-rise delay-5">Every team argues FOR once and AGAINST once this round.</div>
+      <div className="mt-8 font-body text-[26px] text-white/60 anim-rise delay-5">
+        {isPractice(s) ? (
+          <span className="text-gold">A warm-up to learn the format — no points, just practice. Audience: try voting on your phone!</span>
+        ) : (
+          'Every team argues FOR once and AGAINST once this round.'
+        )}
+      </div>
     </Center>
   );
 }
@@ -230,7 +236,7 @@ function QuestionPanel({ s, size = 58 }: { s: PublicState; size?: number }) {
     <div key={d?.questionId ?? ''} className="anim-slam w-full">
       <LedPanel tone="split" className="px-12 py-7">
         <div className="font-condensed tracking-[0.35em] text-gold text-[24px] text-center mb-2">
-          DEBATE {s.cur.debate + 1}
+          {isPractice(s) ? 'PRACTICE · ' : ''}DEBATE {s.cur.debate + 1}
           {qn ? ` · QUESTION ${qn}` : ''}
         </div>
         <div className="font-display leading-[1.08] led-text text-center" style={{ fontSize: size }}>
@@ -378,7 +384,7 @@ function ResultView({ s }: { s: PublicState }) {
   return (
     <Center key={d.id + d.winner}>
       <div className="font-condensed tracking-[0.5em] text-[36px] text-white/70">
-        ROUND {s.cur.round + 1} · DEBATE {s.cur.debate + 1}
+        {roundLabel(s, s.cur.round, false)} · DEBATE {s.cur.debate + 1}
       </div>
       {d.winner ? (
         draw ? (
@@ -397,7 +403,7 @@ function ResultView({ s }: { s: PublicState }) {
         <div className="font-display text-[90px] mt-6">RESULT PENDING…</div>
       )}
       <div className="mt-8 font-condensed text-[56px] text-gold glow-gold anim-pop delay-3">
-        {draw ? `+${s.settings.drawPoints} POINTS EACH` : d.winner ? `+${s.settings.winPoints} POINTS` : ''}
+        {isPractice(s) ? 'PRACTICE — NO POINTS' : draw ? `+${s.settings.drawPoints} POINTS EACH` : d.winner ? `+${s.settings.winPoints} POINTS` : ''}
       </div>
       <div className="mt-8 max-w-[1400px] text-center font-body text-[28px] text-white/70">“{d.question}”</div>
     </Center>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { currentDebate, currentTopic, getEngine, nextLabel, teamName, type HostEngine } from '../lib/engine';
+import { currentDebate, currentTopic, getEngine, isPractice, nextLabel, roundLabel, teamName, topicOf, type HostEngine } from '../lib/engine';
 import { debateFlow, speechOf } from '../lib/content';
 import { useHost, useNow } from '../lib/hooks';
 import { saveCustomTrack, unlockAudio } from '../lib/sound';
@@ -122,14 +122,15 @@ function Run({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngine }) {
       <Card title="Schedule · click to jump">
         <div className="space-y-3">
           {s.schedule.map((r, ri) => {
-            const topic = s.topics.find((t) => t.id === r.topicId);
+            const topic = topicOf(s, r);
             return (
               <div key={ri}>
                 <button
                   onClick={() => e.goRound(ri)}
                   className={`w-full text-left font-display text-xs px-2 py-1 rounded ${s.cur.round === ri && s.cur.step === 'intro' && onShow ? 'bg-gold text-black' : 'text-gold hover:bg-white/5'}`}
                 >
-                  ROUND {ri + 1} · {topic?.title}
+                  {roundLabel(s, ri, false)} · {topic?.title}
+                  {r.practice && <span className="ml-1 text-[10px] text-white/50">(no points)</span>}
                 </button>
                 <div className="mt-1 space-y-1">
                   {r.debates.map((db, di) => {
@@ -164,7 +165,8 @@ function Run({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngine }) {
           <StagePreview s={s} />
           <div className="h-card p-4 flex flex-col">
             <div className="h-title">
-              Round {s.cur.round + 1} · {currentTopic(s)?.title}
+              {roundLabel(s, s.cur.round, false)} · {currentTopic(s)?.title}
+              {isPractice(s) && <span className="ml-2 chip bg-gold/20 text-gold">PRACTICE · no points</span>}
             </div>
             {s.cur.step === 'intro' && onShow ? (
               <div className="mt-2 text-sm text-white/70 flex-1">Round title is on screen. Press NEXT to start Debate 1.</div>

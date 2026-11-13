@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { VoteBars, useRanking } from '../components/Widgets';
-import { currentDebate, currentTopic, teamName } from '../lib/engine';
+import { currentDebate, currentTopic, roundLabel, teamName } from '../lib/engine';
 import { useViewerState } from '../lib/hooks';
 import { getTransport, type VoteResult } from '../lib/transport';
 import type { PollState, PublicState } from '../lib/types';
@@ -208,7 +208,7 @@ function Live({ s, room, pid, votes, saveVote }: { s: PublicState; room: string;
       ) : (
         <>
           <div className="text-xs tracking-[0.3em] text-white/50">
-            ROUND {s.cur.round + 1} · {currentTopic(s)?.title}
+            {roundLabel(s, s.cur.round, false)} · {currentTopic(s)?.title}
           </div>
           {d?.question && s.cur.step !== 'intro' ? (
             <>

@@ -48,6 +48,15 @@ export interface Debate {
 export interface RoundPlan {
   topicId: string;
   debates: Debate[];
+  /** warm-up round: no points */
+  practice?: boolean;
+}
+
+export interface PracticeSettings {
+  enabled: boolean;
+  /** number of practice debates (1 … number of teams) */
+  debates: number;
+  topic: Topic;
 }
 
 /** Steps inside one debate (plus the round intro). */
@@ -143,6 +152,7 @@ export interface PublicState {
   teams: Team[];
   topics: Topic[];
   settings: Settings;
+  practice: PracticeSettings;
   schedule: RoundPlan[];
   cur: { round: number; debate: number; step: Step };
 

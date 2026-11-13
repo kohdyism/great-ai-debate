@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { aiStatements, getApiKey, randomTemplate, setApiKey } from '../lib/generate';
 import { DEFAULT_TOPICS, buildSchedule, makeTeams } from '../lib/content';
 import type { HostEngine } from '../lib/engine';
-import type { PublicState, Settings, Team, Topic } from '../lib/types';
+import type { PracticeSettings, PublicState, Settings, Team, Topic } from '../lib/types';
 import { clone, uid } from '../lib/util';
 import { Card } from './ui';
 
@@ -10,7 +10,20 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
   const [teams, setTeams] = useState<Team[]>(() => clone(s.teams));
   const [topics, setTopics] = useState<Topic[]>(() => clone(s.topics));
   const [settings, setSettings] = useState<Settings>(() => ({ ...s.settings }));
-  const preview = useMemo(() => buildSchedule(teams, topics), [teams, topics]);
+  const [practice, setPractice] = useState<PracticeSettings>(() => clone(s.practice));
+  const preview = useMemo(() => buildSchedule(teams, topics, practice), [teams, topics, practice]);
+  const [pBusy, setPBusy] = useState(false);
+  const generatePractice = async () => {
+    const t = practice.topic;
+    if (!t.title.trim()) return e.toast('Type a warm-up topic first.', 'warn');
+    setPBusy(true);
+    const r = await aiStatements(t.title, 6, t.questions.map((q) => q.text).filter(Boolean));
+    setPBusy(false);
+    setPractice((p) => ({ ...p, topic: { ...p.topic, questions: r.statements.map((text) => ({ id: uid('q'), text })) } }));
+    if (r.error) e.toast('AI unavailable — used the built-in generator.', 'warn');
+  };
+  const editPracticeQ = (qi: number, text: string) =>
+    setPractice((p) => ({ ...p, topic: { ...p.topic, questions: p.topic.questions.map((q, j) => (j === qi ? { ...q, text } : q)) } }));
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [key, setKey] = useState(getApiKey);
   const [showKey, setShowKey] = useState(false);
@@ -32,7 +45,7 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
   const nameOf = (id: string) => teams.find((t) => t.id === id)?.name || '—';
   const started = s.scoreLog.length > 0 || s.schedule.some((r) => r.debates.some((d) => d.question));
   const shapeChanges =
-    teams.length !== s.teams.length || topics.length !== s.topics.length || topics.some((t, i) => t.id !== s.topics[i]?.id);
+    teams.length !== s.teams.length || topics.length !== s.topics.length || topics.some((t, i) => t.id !== s.topics[i]?.id) || practice.enabled !== s.practice.enabled || practice.debates !== s.practice.debates;
 
   const setCount = (n: number) => setTeams((cur) => makeTeams(Math.max(2, Math.min(8, n)), cur));
   const editTopic = (i: number, fn: (t: Topic) => void) =>
@@ -47,7 +60,13 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
     if (cleanTopics.some((t) => t.questions.length === 0)) return window.alert('Every topic needs at least one question.');
     const cleanTeams = teams.map((t, i) => ({ ...t, name: t.name.trim() || `Team ${i + 1}` }));
     if (started && shapeChanges && !window.confirm('You changed the number of teams or rounds. This makes a new schedule and resets all scores. Continue?')) return;
-    e.applySetup(cleanTeams, cleanTopics, settings);
+    const cleanPractice = {
+      ...practice,
+      debates: Math.max(1, Math.min(practice.debates, cleanTeams.length)),
+      topic: { ...practice.topic, title: practice.topic.title.trim() || 'Warm-up', questions: practice.topic.questions.filter((q) => q.text.trim()) },
+    };
+    if (cleanPractice.enabled && !cleanPractice.topic.questions.length) return window.alert('The practice round needs at least one statement (or switch it off).');
+    e.applySetup(cleanTeams, cleanTopics, settings, cleanPractice);
     onDone();
   };
 
@@ -86,6 +105,55 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
             </label>
           ))}
         </div>
+      </Card>
+
+      {/* Practice */}
+      <Card
+        title="Practice round (warm-up, no points)"
+        right={
+          <button className={`btn-sm ${practice.enabled ? 'btn-gold' : 'btn-ghost'}`} onClick={() => setPractice((p) => ({ ...p, enabled: !p.enabled }))}>
+            {practice.enabled ? '✓ Included' : 'Off — click to include'}
+          </button>
+        }
+      >
+        {practice.enabled ? (
+          <>
+            <p className="text-xs text-white/55 mb-3">
+              Runs before Round 1 with the full format (spin → openings → counters → summaries → vote) so teams learn the flow and the audience tries voting. Results don’t count.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm">Practice debates:</span>
+              {Array.from({ length: Math.min(teams.length, 4) }, (_, i) => i + 1).map((n) => (
+                <button key={n} className={`btn-sm ${practice.debates === n ? 'btn-white' : 'btn-ghost'}`} onClick={() => setPractice((p) => ({ ...p, debates: n }))}>
+                  {n}
+                </button>
+              ))}
+              <span className="text-xs text-white/40">(1 is usually enough)</span>
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <input
+                className="inp font-display !py-1.5"
+                value={practice.topic.title}
+                placeholder="Warm-up topic, e.g. Just for fun"
+                onChange={(ev) => setPractice((p) => ({ ...p, topic: { ...p.topic, title: ev.target.value } }))}
+                aria-label="Practice topic"
+              />
+              <button className="btn-gold btn-sm whitespace-nowrap" disabled={pBusy} onClick={() => void generatePractice()}>
+                {pBusy ? 'Generating…' : '✨ Generate statements'}
+              </button>
+            </div>
+            <div className="mt-2 grid md:grid-cols-2 gap-1.5">
+              {practice.topic.questions.map((q, qi) => (
+                <div key={q.id} className="flex items-center gap-2">
+                  <span className="w-5 text-right font-condensed text-white/50">{qi + 1}</span>
+                  <input className="inp !py-1.5" value={q.text} onChange={(ev) => editPracticeQ(qi, ev.target.value)} aria-label={`Practice statement ${qi + 1}`} />
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-white/50">No practice round — the show starts straight with Round 1.</p>
+        )}
       </Card>
 
       {/* 2. Topics */}
@@ -256,11 +324,11 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
 
       {/* Preview */}
       <Card title="Your schedule (made automatically)">
-        <div className="grid md:grid-cols-3 gap-3">
+        <div className="grid md:grid-cols-4 gap-3">
           {preview.map((r, ri) => (
             <div key={ri} className="rounded-lg border border-white/10 p-2">
               <div className="font-display text-sm text-gold">
-                Round {ri + 1}: {topics[ri]?.title}
+                {r.practice ? `Practice: ${practice.topic.title}` : `Round ${ri + (preview[0]?.practice ? 0 : 1)}: ${topics.find((t) => t.id === r.topicId)?.title ?? ''}`}
               </div>
               <ol className="mt-1 space-y-0.5 text-xs">
                 {r.debates.map((d, di) => (
