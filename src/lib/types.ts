@@ -119,9 +119,18 @@ export interface ScoreEntry {
 
 export interface Fx {
   id: string;
-  kind: 'points' | 'confetti' | 'flash';
+  kind: 'points' | 'confetti' | 'flash' | 'sound';
   team?: string | null;
   delta?: number;
+  sound?: string;
+}
+
+export type MusicSlot = 'lobby' | 'suspense' | 'celebrate';
+export interface MusicSettings {
+  on: boolean;
+  volume: number;
+  /** names of host-uploaded songs (the files live in the host browser) */
+  custom: Partial<Record<MusicSlot, string>>;
 }
 
 export interface PublicState {
@@ -145,6 +154,7 @@ export interface PublicState {
   pollHistory: PollState[];
   message: { title: string; body: string } | null;
   sound: boolean;
+  music: MusicSettings;
   fx: Fx | null;
   showScoreboard: boolean;
   audience: { real: number; simulated: number };

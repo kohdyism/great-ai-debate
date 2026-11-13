@@ -3,7 +3,8 @@ import { StageCanvas, Backdrop } from '../components/StageKit';
 import { fireConfetti, wheelAngle } from '../components/Widgets';
 import { HOST_PUB_KEY, currentTopic } from '../lib/engine';
 import { useViewerState } from '../lib/hooks';
-import { audioUnlocked, sfx, unlockAudio } from '../lib/sound';
+import { audioUnlocked, music, playSfx, sfx, unlockAudio, type SfxName, type TrackId } from '../lib/sound';
+import { speechOf } from '../lib/content';
 import { now, timerRemaining } from '../lib/time';
 import { getLocalBus, getTransport } from '../lib/transport';
 import type { PublicState } from '../lib/types';
@@ -95,7 +96,7 @@ export default function StageApp({ room: roomParam }: { room: string | null }) {
               {conn === 'online' ? 'LIVE' : conn === 'connecting' ? 'CONNECTING' : 'RECONNECTING'}
             </span>
           )}
-          {!audioReady && <span className="chip bg-white/10">CLICK FOR SOUND</span>}
+          {!audioReady && <span className="rounded-full bg-gold text-black font-display text-[20px] px-5 py-2 anim-pulse">🔊 CLICK ANYWHERE TO TURN ON SOUND</span>}
           <button onClick={(e) => (e.stopPropagation(), toggleFullscreen())} className="chip bg-white/10 hover:bg-white/20" title="Full screen (F)">
             ⛶ FULL SCREEN
           </button>
@@ -139,16 +140,37 @@ function useStageEffects(s: PublicState | null, audio: boolean) {
       if (now() - s.updatedAt < 5000) {
         if (s.fx.kind === 'confetti') {
           fireConfetti(true);
-          if (sound) sfx.fanfare();
+          if (sound) s.screen === 'champion' ? sfx.bigApplause() : (sfx.fanfare(), sfx.applause());
         } else if (s.fx.kind === 'points' && sound) sfx.points();
         else if (s.fx.kind === 'flash' && sound) sfx.whoosh();
+        else if (s.fx.kind === 'sound' && sound && s.fx.sound) playSfx(s.fx.sound as SfxName);
       }
     }
     if (!p || !sound) return;
+    if (s.status === 'live' && p.status === 'lobby') sfx.showOpen();
     if (s.poll && s.poll.status === 'open' && p.poll?.id !== s.poll.id) sfx.ding();
-    if (s.cur.step === 'intro' && p.cur.step !== 'intro') sfx.boom();
+    const enteredIntro = s.screen === 'show' && s.cur.step === 'intro' && (p.cur.step !== 'intro' || p.screen !== 'show' || p.cur.round !== s.cur.round);
+    if (enteredIntro) sfx.roundSting();
     if (s.cur.step === 'reveal' && p.cur.step === 'spin') sfx.reveal();
+    if (speechOf(s.cur.step) && s.cur.step !== p.cur.step) sfx.go();
+    if (s.cur.step === 'verdict' && p.cur.step !== 'verdict') sfx.suspenseHit();
   }, [s, audio]);
+
+  // Background music follows the show.
+  const want = s && audio && s.sound && s.music?.on ? trackFor(s) : null;
+  const customName = want ? s?.music?.custom?.[want] ?? '' : '';
+  useEffect(() => {
+    if (!want) {
+      music.stop();
+      return;
+    }
+    music.stop();
+    void music.play(want);
+  }, [want, customName]);
+  useEffect(() => {
+    if (s?.music) music.setVolume(s.music.volume);
+  }, [s?.music?.volume, audio]);
+  useEffect(() => () => music.stop(), []);
 
   useEffect(() => {
     let raf = 0;
@@ -181,6 +203,26 @@ function useStageEffects(s: PublicState | null, audio: boolean) {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [audio]);
+}
+
+/** Which music loop fits the moment (null = quiet so speakers can be heard). */
+function trackFor(s: PublicState): TrackId | null {
+  if (s.status === 'paused') return 'lobby';
+  switch (s.screen) {
+    case 'home':
+    case 'join':
+    case 'message':
+    case 'scoreboard':
+      return 'lobby';
+    case 'champion':
+      return 'celebrate';
+    case 'show':
+      if (s.cur.step === 'intro') return 'lobby';
+      if (s.cur.step === 'spin' || s.cur.step === 'verdict') return 'suspense';
+      if (s.cur.step === 'result') return 'celebrate';
+      return null;
+  }
+  return null;
 }
 
 function RoomPrompt({ onRoom }: { onRoom: (r: string) => void }) {

@@ -9,6 +9,7 @@ import { now, setClockOffset, timerRemaining } from './time';
 import { getLocalBus, getTransport, type ConnStatus, type DemoRequest, type Transport, type VoteResult } from './transport';
 import type {
   Debate,
+  MusicSlot,
   PollOption,
   PollResults,
   PollState,
@@ -61,6 +62,7 @@ export function initialPublic(roomCode: string, backend: 'demo' | 'supabase'): P
     pollHistory: [],
     message: null,
     sound: true,
+    music: { on: true, volume: 0.5, custom: {} },
     fx: null,
     showScoreboard: true,
     audience: { real: 0, simulated: 0 },
@@ -156,6 +158,7 @@ export class HostEngine {
     if (savedPub && savedPriv && savedPub.backend === backend) {
       this.state = { ...initialPublic(savedPub.roomCode, backend), ...savedPub };
       this.state.settings = { ...DEFAULT_SETTINGS, ...savedPub.settings };
+      this.state.music = Object.assign({ on: true, volume: 0.5, custom: {} }, savedPub.music ?? {});
       this.priv = { ...initialPrivate(), ...savedPriv };
     } else {
       this.state = initialPublic(makeRoomCode(), backend);
@@ -693,6 +696,16 @@ export class HostEngine {
       s.screen = 'message';
     });
   toggleSound = () => this.update((s) => void (s.sound = !s.sound));
+  toggleMusic = () => this.update((s) => void (s.music = { ...s.music, on: !s.music.on }));
+  setMusicVolume = (v: number) => this.update((s) => void (s.music = { ...s.music, volume: Math.max(0, Math.min(1, v)) }));
+  setCustomTrack = (slot: MusicSlot, name: string | null) =>
+    this.update((s) => {
+      const custom = { ...s.music.custom };
+      if (name) custom[slot] = name;
+      else delete custom[slot];
+      s.music = { ...s.music, custom };
+    });
+  playSound = (name: string) => this.update((s) => void (s.fx = { id: uid(), kind: 'sound', sound: name }));
   fireConfetti = () => this.update((s) => void (s.fx = { id: uid(), kind: 'confetti' }));
   pauseShow = () =>
     this.update((s) => {

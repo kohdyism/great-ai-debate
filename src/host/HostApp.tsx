@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { currentDebate, currentTopic, getEngine, nextLabel, teamName, type HostEngine } from '../lib/engine';
 import { debateFlow, speechOf } from '../lib/content';
 import { useHost, useNow } from '../lib/hooks';
-import { unlockAudio } from '../lib/sound';
+import { saveCustomTrack, unlockAudio } from '../lib/sound';
 import { fmtClockFull, timerRemaining } from '../lib/time';
-import type { PrivateState, PublicState, Step } from '../lib/types';
+import type { MusicSlot, PrivateState, PublicState, Step } from '../lib/types';
 import { QR, joinUrl, useRanking } from '../components/Widgets';
 import { Card, ConfirmButton, StagePreview } from './ui';
 import Setup from './Setup';
@@ -259,6 +259,7 @@ function Run({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngine }) {
             )}
           </div>
         </Card>
+        <SoundCard s={s} e={e} />
         <Card title="Audience">
           <div className="flex gap-3 items-center">
             <div className="bg-white p-1 rounded shrink-0">
@@ -440,6 +441,102 @@ function Scores({ s, e }: { s: PublicState; e: HostEngine }) {
         ))}
       </div>
       <p className="text-[11px] text-white/40 mt-2">Debate points are added automatically when you pick a winner. Use ±1 for bonuses or corrections.</p>
+    </Card>
+  );
+}
+
+const BOARD: [string, string][] = [
+  ['applause', '👏 Applause'],
+  ['bigApplause', '🎉 Big cheer'],
+  ['drumroll', '🥁 Drumroll'],
+  ['airhorn', '📯 Airhorn'],
+  ['gasp', '😮 Gasp'],
+  ['boo', '👎 Boo'],
+  ['correct', '✅ Ding-ding'],
+  ['wrong', '❌ Wrong'],
+  ['suspenseHit', '🎻 Suspense'],
+  ['fanfare', '🎺 Fanfare'],
+  ['showOpen', '🎬 Show intro'],
+  ['buzzer', '⏰ Buzzer'],
+];
+const SLOTS: [MusicSlot, string, string][] = [
+  ['lobby', 'Walk-in / breaks', 'title, join screen, round intros, leaderboard'],
+  ['suspense', 'Suspense', 'wheel spin and “who won?”'],
+  ['celebrate', 'Celebration', 'debate results and champion'],
+];
+
+function SoundCard({ s, e }: { s: PublicState; e: HostEngine }) {
+  const [open, setOpen] = useState(false);
+  const upload = async (slot: MusicSlot, f: File | null) => {
+    try {
+      await saveCustomTrack(slot, f);
+      e.setCustomTrack(slot, f ? f.name : null);
+      e.toast(f ? `“${f.name}” will play for ${slot === 'lobby' ? 'walk-in & breaks' : slot}.` : 'Back to the built-in music.', 'ok');
+    } catch {
+      e.toast('Could not store that file in this browser.', 'error');
+    }
+  };
+  return (
+    <Card
+      title="Sound & music"
+      right={
+        <button className={`btn-sm ${s.sound ? 'btn-ghost' : 'btn-danger'}`} onClick={e.toggleSound}>
+          {s.sound ? '🔊 On' : '🔇 All muted'}
+        </button>
+      }
+    >
+      <div className="flex items-center gap-2">
+        <button className={`btn-sm ${s.music.on ? 'btn-gold' : 'btn-ghost'}`} onClick={e.toggleMusic}>
+          🎵 Music {s.music.on ? 'on' : 'off'}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={s.music.volume}
+          onChange={(ev) => e.setMusicVolume(Number(ev.target.value))}
+          className="flex-1 accent-[#f7d774]"
+          aria-label="Music volume"
+        />
+      </div>
+      <p className="text-[11px] text-white/45 mt-1">
+        Music changes automatically: walk-in → suspense on the wheel → celebration on results, and goes quiet during speeches. Sound plays from the projector window — click it once to enable.
+      </p>
+      <div className="grid grid-cols-3 gap-1 mt-2">
+        {BOARD.map(([id, label]) => (
+          <button key={id} className="btn-ghost btn-sm !px-1 !text-[11px]" onClick={() => e.playSound(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <button className="text-[11px] underline text-white/60 mt-2" onClick={() => setOpen(!open)}>
+        {open ? 'Hide' : 'Use your own songs (optional)'}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          {SLOTS.map(([slot, label, hint]) => (
+            <div key={slot} className="text-xs">
+              <div className="font-semibold">
+                {label} <span className="text-white/40 font-normal">— {hint}</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <label className="btn-ghost btn-sm cursor-pointer">
+                  {s.music.custom[slot] ? 'Change' : 'Choose file'}
+                  <input type="file" accept="audio/*" className="hidden" onChange={(ev) => ev.target.files?.[0] && void upload(slot, ev.target.files[0])} />
+                </label>
+                <span className="truncate text-white/60 flex-1">{s.music.custom[slot] ?? 'built-in track'}</span>
+                {s.music.custom[slot] && (
+                  <button className="btn-ghost btn-sm" onClick={() => void upload(slot, null)}>
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          <p className="text-[10px] text-white/40">Songs are saved in this browser and play from the projector window opened from this laptop. Only use music you have the right to play at your event.</p>
+        </div>
+      )}
     </Card>
   );
 }
