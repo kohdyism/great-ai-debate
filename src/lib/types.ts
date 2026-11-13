@@ -24,7 +24,12 @@ export interface Topic {
 
 export interface Settings {
   prepSec: number;
+  /** opening speech */
   speechSec: number;
+  /** counter / rebuttal (0 = skip) */
+  rebuttalSec: number;
+  /** closing summary (0 = skip) */
+  summarySec: number;
   winPoints: number;
   drawPoints: number;
   spinMs: number;
@@ -46,7 +51,8 @@ export interface RoundPlan {
 }
 
 /** Steps inside one debate (plus the round intro). */
-export type Step = 'intro' | 'spin' | 'reveal' | 'prep' | 'for' | 'against' | 'verdict' | 'result';
+export type SpeechStep = 'for' | 'against' | 'forCounter' | 'againstCounter' | 'againstSummary' | 'forSummary';
+export type Step = 'intro' | 'spin' | 'reveal' | 'prep' | SpeechStep | 'verdict' | 'result';
 
 export type ScreenId = 'home' | 'join' | 'show' | 'scoreboard' | 'champion' | 'message';
 

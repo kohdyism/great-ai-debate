@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { currentDebate, currentTopic, getEngine, nextLabel, teamName, type HostEngine } from '../lib/engine';
+import { debateFlow, speechOf } from '../lib/content';
 import { useHost, useNow } from '../lib/hooks';
 import { unlockAudio } from '../lib/sound';
 import { fmtClockFull, timerRemaining } from '../lib/time';
@@ -100,19 +101,16 @@ export default function HostApp() {
 }
 
 // ═══════════════════════════ RUN ═══════════════════════════
-const STEPS: { id: Step; label: string }[] = [
-  { id: 'spin', label: 'Spin' },
-  { id: 'reveal', label: 'Question' },
-  { id: 'prep', label: 'Prep' },
-  { id: 'for', label: 'FOR speaks' },
-  { id: 'against', label: 'AGAINST speaks' },
-  { id: 'verdict', label: 'Who won?' },
-  { id: 'result', label: 'Result' },
-];
+const stepLabel = (st: Step) => {
+  const sp = speechOf(st);
+  if (sp) return `${sp.side === 'for' ? 'FOR' : 'AGAINST'} ${sp.kind.toLowerCase()}`;
+  return ({ spin: 'Spin', reveal: 'Question', prep: 'Prep', verdict: 'Who won?', result: 'Result', intro: 'Intro' } as Record<string, string>)[st] ?? st;
+};
 
 function Run({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngine }) {
   const d = currentDebate(s);
   const onShow = s.screen === 'show';
+  const STEPS = debateFlow(s.settings).map((id) => ({ id, label: stepLabel(id) }));
   const stepIdx = STEPS.findIndex((x) => x.id === s.cur.step);
   const spinning = useNow(s.wheel.status === 'spinning', 5) < s.wheel.startedAt + s.wheel.durationMs && s.wheel.status === 'spinning';
   const label = nextLabel(s);
@@ -200,7 +198,7 @@ function Run({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEngine }) {
                 key={st.id}
                 onClick={() => (st.id === 'spin' ? e.goDebate(s.cur.round, s.cur.debate) : e.goStep(st.id))}
                 disabled={st.id !== 'spin' && !d?.question}
-                className={`flex-1 rounded-md py-1.5 text-[11px] font-semibold border ${
+                className={`flex-1 rounded-md py-1.5 px-0.5 text-[10px] leading-tight font-semibold border ${
                   i === stepIdx ? 'bg-gold text-black border-gold' : i < stepIdx ? 'bg-white/10 border-white/10 text-white/70' : 'border-white/10 text-white/40'
                 } disabled:opacity-30`}
               >
@@ -303,7 +301,7 @@ function StepControls({ s, p, e }: { s: PublicState; p: PrivateState; e: HostEng
         </div>
       </Card>
     );
-  if (step === 'prep' || step === 'for' || step === 'against') return <TimerCard s={s} e={e} />;
+  if (step === 'prep' || speechOf(step)) return <TimerCard s={s} e={e} />;
   if (step === 'verdict' || step === 'result') return <VerdictCard s={s} p={p} e={e} />;
   return null;
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { AnimatedNumber, BigTimer, QR, StageScoreBar, VoteBars, Wheel, joinUrl, useRanking, wheelAngle } from '../components/Widgets';
 import { Backdrop, LedPanel, MotionText, Podium, TitleLockup } from '../components/StageKit';
 import { currentDebate, currentRound, currentTopic, teamName, usedQuestionIds } from '../lib/engine';
+import { SPEECHES, debateFlow, speechOf, speechSec } from '../lib/content';
 import { useNow } from '../lib/hooks';
 import type { PublicState } from '../lib/types';
 
@@ -243,11 +244,41 @@ function QuestionPanel({ s, size = 58 }: { s: PublicState; size?: number }) {
 function DebateView({ s }: { s: PublicState }) {
   const d = currentDebate(s);
   const step = s.cur.step;
-  const speaking = step === 'for' ? 'for' : step === 'against' ? 'against' : null;
+  const sp = speechOf(step);
+  const speaking = sp?.side ?? null;
+  const flow = debateFlow(s.settings);
+  const enabled = SPEECHES.filter((x) => flow.includes(x.step));
+  const curIdx = flow.indexOf(step);
   return (
     <>
-      <div className="absolute left-[100px] right-[100px] top-[40px]">
+      <div className="absolute left-[100px] right-[100px] top-[30px]">
         <QuestionPanel s={s} />
+        <div className="flex justify-center gap-2 mt-4">
+          {enabled.map((x) => {
+            const i = flow.indexOf(x.step);
+            const now_ = x.step === step;
+            const done = i < curIdx;
+            return (
+              <div
+                key={x.step}
+                className={`rounded-full px-4 py-1.5 font-condensed text-[22px] tracking-[0.12em] border transition-all ${
+                  now_
+                    ? x.side === 'for'
+                      ? 'bg-embrace text-white border-embrace-bright shadow-[0_0_20px_rgba(31,123,255,0.8)] scale-110'
+                      : 'bg-ban text-white border-ban-bright shadow-[0_0_20px_rgba(255,45,61,0.8)] scale-110'
+                    : done
+                      ? 'border-white/20 text-white/40'
+                      : x.side === 'for'
+                        ? 'border-embrace/50 text-embrace-bright/80'
+                        : 'border-ban/50 text-ban-bright/80'
+                }`}
+              >
+                {done ? '✓ ' : ''}
+                {x.side.toUpperCase()} {x.kind}
+              </div>
+            );
+          })}
+        </div>
       </div>
       {speaking && (
         <div
@@ -273,15 +304,18 @@ function DebateView({ s }: { s: PublicState }) {
           <div className="text-center anim-rise pb-20">
             <div className="font-display text-[60px] text-white">GET READY…</div>
             <div className="font-body text-[28px] text-white/70 mt-3">
-              {s.settings.prepSec}s to prepare, then {s.settings.speechSec}s each
+              {s.settings.prepSec}s to prepare · openings {s.settings.speechSec}s
+              {speechSec(s.settings, 'rebuttalSec') > 0 ? ` · counters ${speechSec(s.settings, 'rebuttalSec')}s` : ''}
+              {speechSec(s.settings, 'summarySec') > 0 ? ` · summaries ${speechSec(s.settings, 'summarySec')}s` : ''}
             </div>
           </div>
         ) : (
           <>
-            <BigTimer t={s.timer} size={330} />
+            <BigTimer t={s.timer} size={300} />
             {speaking && (
               <div className={`mt-4 font-display text-[32px] text-center uppercase ${speaking === 'for' ? 'text-embrace-bright' : 'text-ban-bright'}`}>
-                {teamName(s, speaking === 'for' ? d?.forTeam : d?.againstTeam)} HAS THE FLOOR
+                {teamName(s, speaking === 'for' ? d?.forTeam : d?.againstTeam)} ·{' '}
+                {sp?.kind === 'OPENING' ? 'OPENING ARGUMENT' : sp?.kind === 'COUNTER' ? 'COUNTER-ARGUMENT' : 'CLOSING SUMMARY'}
               </div>
             )}
           </>

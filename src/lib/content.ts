@@ -1,4 +1,20 @@
-import type { Debate, RoundPlan, Settings, Team, Topic } from './types';
+import type { Debate, RoundPlan, Settings, Side, SpeechStep, Step, Team, Topic } from './types';
+
+/** Proper debate order: openings (FOR first), counters, then summaries (AGAINST first, FOR has the last word). */
+export const SPEECHES: { step: SpeechStep; side: Side; kind: 'OPENING' | 'COUNTER' | 'SUMMARY'; secKey: 'speechSec' | 'rebuttalSec' | 'summarySec' }[] = [
+  { step: 'for', side: 'for', kind: 'OPENING', secKey: 'speechSec' },
+  { step: 'against', side: 'against', kind: 'OPENING', secKey: 'speechSec' },
+  { step: 'forCounter', side: 'for', kind: 'COUNTER', secKey: 'rebuttalSec' },
+  { step: 'againstCounter', side: 'against', kind: 'COUNTER', secKey: 'rebuttalSec' },
+  { step: 'againstSummary', side: 'against', kind: 'SUMMARY', secKey: 'summarySec' },
+  { step: 'forSummary', side: 'for', kind: 'SUMMARY', secKey: 'summarySec' },
+];
+export const speechOf = (step: Step) => SPEECHES.find((x) => x.step === step) ?? null;
+export const speechSec = (s: Settings, secKey: 'speechSec' | 'rebuttalSec' | 'summarySec') => s[secKey] ?? 30;
+/** The step order of one debate, skipping counters/summaries set to 0 seconds. */
+export function debateFlow(s: Settings): Step[] {
+  return ['spin', 'reveal', 'prep', ...SPEECHES.filter((x) => speechSec(s, x.secKey) > 0).map((x) => x.step), 'verdict', 'result'];
+}
 import { uid } from './util';
 
 const q = (text: string, i: number, t: string) => ({ id: `${t}-q${i + 1}`, text });
@@ -35,6 +51,8 @@ export const DEFAULT_TOPICS: Topic[] = [
 export const DEFAULT_SETTINGS: Settings = {
   prepSec: 30,
   speechSec: 60,
+  rebuttalSec: 30,
+  summarySec: 30,
   winPoints: 10,
   drawPoints: 5,
   spinMs: 6000,

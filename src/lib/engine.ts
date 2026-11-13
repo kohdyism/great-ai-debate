@@ -4,7 +4,7 @@
 // saved locally (refresh recovery) and pushed to the transport
 // (BroadcastChannel in demo mode, Supabase in live mode).
 // ─────────────────────────────────────────────────────────────
-import { DEFAULT_SETTINGS, DEFAULT_TOPICS, buildSchedule, makeTeams } from './content';
+import { DEFAULT_SETTINGS, DEFAULT_TOPICS, buildSchedule, debateFlow, makeTeams, speechOf, speechSec } from './content';
 import { now, setClockOffset, timerRemaining } from './time';
 import { getLocalBus, getTransport, type ConnStatus, type DemoRequest, type Transport, type VoteResult } from './transport';
 import type {
@@ -96,26 +96,25 @@ export function nextLabel(s: PublicState): string {
   if (s.screen === 'message') return 'Back to the debates';
   if (s.screen === 'champion') return 'Show complete 🎉';
   if (s.screen === 'scoreboard') return showFinished(s) ? 'Crown the champion 🏆' : 'Back to the debates';
-  switch (s.cur.step) {
-    case 'intro':
-      return 'Spin for Debate 1';
-    case 'spin':
-      return s.wheel.status === 'spinning' ? 'Spinning…' : 'SPIN THE WHEEL';
-    case 'reveal':
-      return `Start ${s.settings.prepSec}s preparation`;
-    case 'prep':
-      return `${teamName(s, d?.forTeam)} speaks FOR (${s.settings.speechSec}s)`;
-    case 'for':
-      return `${teamName(s, d?.againstTeam)} speaks AGAINST (${s.settings.speechSec}s)`;
-    case 'against':
-      return 'Decide who won';
-    case 'verdict':
-      return d?.winner ? 'Show the result' : 'Pick a winner first ↓';
-    case 'result':
-      if (!isLastDebate(s)) return `Next: Debate ${s.cur.debate + 2}`;
-      if (!isLastRound(s)) return `Next: Round ${s.cur.round + 2}`;
-      return 'Final scoreboard';
+  const step = s.cur.step;
+  if (step === 'intro') return 'Spin for Debate 1';
+  if (step === 'spin') return s.wheel.status === 'spinning' ? 'Spinning…' : 'SPIN THE WHEEL';
+  if (step === 'verdict') return d?.winner ? 'Show the result' : 'Pick a winner first ↓';
+  if (step === 'result') {
+    if (!isLastDebate(s)) return `Next: Debate ${s.cur.debate + 2}`;
+    if (!isLastRound(s)) return `Next: Round ${s.cur.round + 2}`;
+    return 'Final scoreboard';
   }
+  const flow = debateFlow(s.settings);
+  const nxt = flow[flow.indexOf(step) + 1];
+  if (nxt === 'prep') return `Start ${s.settings.prepSec}s preparation`;
+  if (nxt === 'verdict') return 'Decide who won';
+  const sp = speechOf(nxt);
+  if (sp) {
+    const team = teamName(s, sp.side === 'for' ? d?.forTeam : d?.againstTeam);
+    return `${team}: ${sp.side.toUpperCase()} ${sp.kind.toLowerCase()} (${speechSec(s.settings, sp.secKey)}s)`;
+  }
+  return 'Next';
 }
 
 export interface Toast {
@@ -156,6 +155,7 @@ export class HostEngine {
     const backend = this.transport.kind;
     if (savedPub && savedPriv && savedPub.backend === backend) {
       this.state = { ...initialPublic(savedPub.roomCode, backend), ...savedPub };
+      this.state.settings = { ...DEFAULT_SETTINGS, ...savedPub.settings };
       this.priv = { ...initialPrivate(), ...savedPriv };
     } else {
       this.state = initialPublic(makeRoomCode(), backend);
@@ -421,14 +421,6 @@ export class HostEngine {
       case 'spin':
         if (s.wheel.status === 'landed' && d?.question) return this.goStep('reveal');
         return this.spin();
-      case 'reveal':
-        return this.goStep('prep');
-      case 'prep':
-        return this.goStep('for');
-      case 'for':
-        return this.goStep('against');
-      case 'against':
-        return this.goStep('verdict');
       case 'verdict':
         if (!d?.winner) return this.toast('Pick the winner of this debate first (or Draw).', 'warn');
         return this.goStep('result');
@@ -439,6 +431,12 @@ export class HostEngine {
           x.screen = 'scoreboard';
           x.fx = { id: uid(), kind: 'flash' };
         });
+      default: {
+        // reveal → prep → openings → counters → summaries → verdict
+        const flow = debateFlow(s.settings);
+        const nxt = flow[flow.indexOf(s.cur.step) + 1];
+        if (nxt) return this.goStep(nxt);
+      }
     }
   };
 
@@ -456,9 +454,11 @@ export class HostEngine {
       }
       if (step === 'reveal') s.timer = emptyTimer(st.prepSec, 'Preparation');
       if (step === 'prep') s.timer = { ...emptyTimer(st.prepSec, 'Preparation'), startedAt: now(), status: 'running' };
-      if (step === 'for') s.timer = { ...emptyTimer(st.speechSec, `${teamName(s, d?.forTeam)} · FOR`, 'for'), startedAt: now(), status: 'running' };
-      if (step === 'against')
-        s.timer = { ...emptyTimer(st.speechSec, `${teamName(s, d?.againstTeam)} · AGAINST`, 'against'), startedAt: now(), status: 'running' };
+      const sp = speechOf(step);
+      if (sp) {
+        const team = teamName(s, sp.side === 'for' ? d?.forTeam : d?.againstTeam);
+        s.timer = { ...emptyTimer(speechSec(st, sp.secKey), `${team} · ${sp.side.toUpperCase()} ${sp.kind}`, sp.side), startedAt: now(), status: 'running' };
+      }
       if ((step === 'verdict' || step === 'result') && s.timer.status === 'running') {
         s.timer = { ...s.timer, baseMs: timerRemaining(s.timer), startedAt: null, status: 'paused' };
       }

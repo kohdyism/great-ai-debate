@@ -224,11 +224,18 @@ export default function Setup({ s, e, onDone }: { s: PublicState; e: HostEngine;
 
       {/* 3. Timings */}
       <Card title="③ Timings & points">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <p className="text-xs text-white/50 mb-3">
+          Each debate runs like a proper debate: <b className="text-embrace-bright">FOR opening</b> → <b className="text-ban-bright">AGAINST opening</b> →{' '}
+          <b className="text-embrace-bright">FOR counter</b> → <b className="text-ban-bright">AGAINST counter</b> → <b className="text-ban-bright">AGAINST summary</b> →{' '}
+          <b className="text-embrace-bright">FOR summary</b> (the side that opened gets the last word).
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {(
             [
               ['prepSec', 'Preparation (sec)'],
-              ['speechSec', 'Each speech (sec)'],
+              ['speechSec', 'Opening speech (sec)'],
+              ['rebuttalSec', 'Counter-argument (sec, 0 = skip)'],
+              ['summarySec', 'Closing summary (sec, 0 = skip)'],
               ['winPoints', 'Points for a win'],
               ['drawPoints', 'Points each for a draw'],
             ] as [keyof Settings, string][]
