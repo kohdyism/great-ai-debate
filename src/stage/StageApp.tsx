@@ -10,6 +10,7 @@ import { getLocalBus, getTransport } from '../lib/transport';
 import type { PublicState } from '../lib/types';
 import { safeJson } from '../lib/util';
 import { HomeScreen, MessageScreen, StageScreen } from './Screens';
+import { BURST_MS, SoundBurst } from '../components/Bursts';
 
 function resolveRoom(param: string | null): string | null {
   if (param) return param.toUpperCase();
@@ -46,6 +47,7 @@ export default function StageApp({ room: roomParam }: { room: string | null }) {
   }, []);
 
   useStageEffects(state, audioReady);
+  const burst = useBursts(state);
 
   if (live && !room) return <RoomPrompt onRoom={setRoom} />;
 
@@ -87,6 +89,7 @@ export default function StageApp({ room: roomParam }: { room: string | null }) {
           </div>
         )}
         <Flash state={state} />
+        {burst && <SoundBurst key={burst.id} name={burst.name} />}
 
         <div className="absolute bottom-3 right-4 z-50 flex items-center gap-3 text-[15px] font-body text-white/50">
           {state?.backend === 'demo' && <span className="chip bg-gold/15 text-gold border border-gold/30">DEMO MODE</span>}
@@ -104,6 +107,27 @@ export default function StageApp({ room: roomParam }: { room: string | null }) {
       </StageCanvas>
     </div>
   );
+}
+
+/** Motion graphics for soundboard effects and the show opening (shown even when muted). */
+function useBursts(s: PublicState | null) {
+  const [burst, setBurst] = useState<{ id: string; name: string } | null>(null);
+  const prev = useRef<PublicState | null>(null);
+  useEffect(() => {
+    if (!s) return;
+    const p = prev.current;
+    prev.current = s;
+    if (!p) return; // never replay on first load / refresh
+    let next: { id: string; name: string } | null = null;
+    if (s.fx?.kind === 'sound' && s.fx.sound && s.fx.id !== p.fx?.id && now() - s.updatedAt < 5000) next = { id: s.fx.id, name: s.fx.sound };
+    else if (s.status === 'live' && p.status === 'lobby') next = { id: `open-${s.v}`, name: 'showOpen' };
+    if (!next) return;
+    setBurst(next);
+    const id = next.id;
+    // Not tied to effect cleanup: state updates every few hundred ms must not cancel the hide timer.
+    setTimeout(() => setBurst((b) => (b?.id === id ? null : b)), BURST_MS[next.name] ?? 2500);
+  }, [s]);
+  return burst;
 }
 
 function toggleFullscreen() {
