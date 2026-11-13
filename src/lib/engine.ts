@@ -176,6 +176,19 @@ export class HostEngine {
         this.state.topics = clone(DEFAULT_TOPICS);
         this.state.schedule = buildSchedule(this.state.teams, this.state.topics, savedPub.practice ?? DEFAULT_PRACTICE);
       }
+      // Swap the few earlier example statements that research doesn't support for evidence-safe versions.
+      const FIX: Record<string, string> = {
+        'AI makes the workplace fairer.': 'AI will make the workplace fairer.',
+        'AI skills matter more than a degree.': 'AI skills will matter more than a degree.',
+        'AI tutors are better than human teachers.': 'AI tutors should replace some human teaching.',
+        'AI makes education fairer.': 'AI will make education fairer.',
+        'AI makes the rich richer.': 'AI will widen the gap between rich and poor.',
+        'Breakfast is the most important meal.': 'Every student should take a gap year.',
+      };
+      const fixTopic = (t: Topic) => ({ ...t, questions: t.questions.map((q) => (FIX[q.text] ? { ...q, text: FIX[q.text] } : q)) });
+      this.state.topics = this.state.topics.map(fixTopic);
+      if (this.state.practice) this.state.practice = { ...this.state.practice, topic: fixTopic(this.state.practice.topic) };
+      for (const r of this.state.schedule) for (const d of r.debates) if (d.question && FIX[d.question] && !d.winner) d.question = FIX[d.question];
       if (!savedPub.practice) {
         // Older saved show: add the practice round if nothing has been played yet.
         this.state.practice = clone(DEFAULT_PRACTICE);
